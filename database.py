@@ -53,7 +53,13 @@ def init_db():
             "interval_seconds": "10",
             "timeout_seconds": "5",
             "auto_probe_enabled": "1",
-            "location_name": "Sede Principal"
+            "location_name": "Sede Principal",
+            "auth_enabled": "0",
+            "auth_type": "ntlm",
+            "auth_domain": "",
+            "auth_user": "",
+            "auth_password": "",
+            "auth_token": ""
         }
         for k, v in defaults.items():
             cursor.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))

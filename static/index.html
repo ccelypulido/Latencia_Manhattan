@@ -362,6 +362,49 @@
                     </label>
                     <span class="switch-label">Habilitar monitoreo continuo en segundo plano</span>
                 </div>
+
+                <hr style="border-color: var(--border-color); margin: 1.25rem 0;">
+
+                <div class="form-group checkbox-group">
+                    <label class="switch">
+                        <input type="checkbox" id="cfgAuthEnabled">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="switch-label font-bold">Habilitar Autenticación de Dominio (NTLM / Basic)</span>
+                </div>
+
+                <div id="authConfigFields" style="display: none; flex-direction: column; gap: 0.85rem; background: rgba(30, 41, 59, 0.4); padding: 1rem; border-radius: 10px; border: 1px solid var(--border-color); margin-top: 0.5rem;">
+                    <div class="form-group">
+                        <label for="cfgAuthType">Tipo de Autenticación:</label>
+                        <select id="cfgAuthType" class="form-select font-bold">
+                            <option value="ntlm">NTLM v2 (Active Directory / Dominio Windows)</option>
+                            <option value="basic">HTTP Basic Auth (Usuario y Contraseña)</option>
+                            <option value="bearer">Bearer Token / Header de Autorización</option>
+                        </select>
+                    </div>
+
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="cfgAuthDomain">Dominio Active Directory:</label>
+                            <input type="text" id="cfgAuthDomain" class="form-input" placeholder="Ej: MANH o DOMINIO">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfgAuthUser">Usuario de Dominio:</label>
+                            <input type="text" id="cfgAuthUser" class="form-input" placeholder="Ej: usuario_dominio">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cfgAuthPassword">Contraseña de Dominio:</label>
+                        <input type="password" id="cfgAuthPassword" class="form-input" placeholder="••••••••">
+                    </div>
+
+                    <div class="form-group" id="tokenGroup" style="display: none;">
+                        <label for="cfgAuthToken">Token de Autorización / Cookie:</label>
+                        <input type="text" id="cfgAuthToken" class="form-input" placeholder="Bearer eyJhbGciOi...">
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button id="btnSaveConfig" class="btn btn-primary"><i data-lucide="save"></i> Guardar Cambios</button>

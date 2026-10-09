@@ -67,6 +67,20 @@ function setupEventListeners() {
         refreshAllData();
     });
 
+    // Auth Toggle Event Listeners
+    const chkAuth = document.getElementById('cfgAuthEnabled');
+    const authFields = document.getElementById('authConfigFields');
+    const selAuthType = document.getElementById('cfgAuthType');
+    const tokenGrp = document.getElementById('tokenGroup');
+
+    chkAuth.addEventListener('change', () => {
+        authFields.style.display = chkAuth.checked ? 'flex' : 'none';
+    });
+
+    selAuthType.addEventListener('change', () => {
+        tokenGrp.style.display = (selAuthType.value === 'bearer') ? 'block' : 'none';
+    });
+
     // Close modal on click outside card
     document.querySelectorAll('.modal-overlay').forEach(modal => {
         modal.addEventListener('click', (e) => {
@@ -100,6 +114,19 @@ async function loadConfig() {
         document.getElementById('cfgTimeout').value = cfg.timeout_seconds || '5';
         document.getElementById('cfgAutoEnabled').checked = (cfg.auto_probe_enabled === '1');
 
+        // Authentication fields
+        const isAuthEnabled = (cfg.auth_enabled === '1');
+        document.getElementById('cfgAuthEnabled').checked = isAuthEnabled;
+        document.getElementById('authConfigFields').style.display = isAuthEnabled ? 'flex' : 'none';
+
+        document.getElementById('cfgAuthType').value = cfg.auth_type || 'ntlm';
+        document.getElementById('cfgAuthDomain').value = cfg.auth_domain || '';
+        document.getElementById('cfgAuthUser').value = cfg.auth_user || '';
+        document.getElementById('cfgAuthPassword').value = cfg.auth_password || '';
+        document.getElementById('cfgAuthToken').value = cfg.auth_token || '';
+
+        document.getElementById('tokenGroup').style.display = ((cfg.auth_type || 'ntlm') === 'bearer') ? 'block' : 'none';
+
         const statusLabel = document.querySelector('.status-label');
         const statusDot = document.querySelector('.status-dot');
         if (cfg.auto_probe_enabled === '1') {
@@ -122,6 +149,13 @@ async function saveConfig() {
     const timeout = document.getElementById('cfgTimeout').value;
     const autoEnabled = document.getElementById('cfgAutoEnabled').checked ? '1' : '0';
 
+    const authEnabled = document.getElementById('cfgAuthEnabled').checked ? '1' : '0';
+    const authType = document.getElementById('cfgAuthType').value;
+    const authDomain = document.getElementById('cfgAuthDomain').value.trim();
+    const authUser = document.getElementById('cfgAuthUser').value.trim();
+    const authPassword = document.getElementById('cfgAuthPassword').value;
+    const authToken = document.getElementById('cfgAuthToken').value.trim();
+
     if (!targetUrl) {
         alert('Por favor ingrese una URL válida.');
         return;
@@ -136,7 +170,13 @@ async function saveConfig() {
                 target_url: targetUrl,
                 interval_seconds: interval,
                 timeout_seconds: timeout,
-                auto_probe_enabled: autoEnabled
+                auto_probe_enabled: autoEnabled,
+                auth_enabled: authEnabled,
+                auth_type: authType,
+                auth_domain: authDomain,
+                auth_user: authUser,
+                auth_password: authPassword,
+                auth_token: authToken
             })
         });
 

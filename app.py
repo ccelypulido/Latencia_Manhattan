@@ -32,7 +32,7 @@ def background_probe_loop():
             location_name = cfg.get("location_name", "Sede Principal")
 
             if auto_enabled and target_url:
-                result = probe.measure_latency(target_url, timeout=timeout)
+                result = probe.measure_latency(target_url, timeout=timeout, auth_config=cfg)
                 database.save_record(result, location=location_name)
 
             # Sleep in 1-second ticks so we can stop quickly
@@ -105,7 +105,7 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             target_url = query.get("url", [cfg.get("target_url", "https://alkop.sce.manh.com/ping")])[0]
             timeout = float(query.get("timeout", [cfg.get("timeout_seconds", "5")])[0])
             location_name = cfg.get("location_name", "Sede Principal")
-            result = probe.measure_latency(target_url, timeout=timeout)
+            result = probe.measure_latency(target_url, timeout=timeout, auth_config=cfg)
             database.save_record(result, location=location_name)
             return self.send_json(result)
 
