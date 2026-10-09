@@ -185,6 +185,17 @@ def get_statistics(location_filter: Optional[str] = None) -> Dict[str, Any]:
         """, params)
         row = cursor.fetchone()
 
+        if not row or row[0] is None:
+            # Fallback if no is_error=0 records exist
+            cursor.execute(f"""
+                SELECT 
+                    AVG(total_ms), AVG(dns_ms), AVG(tcp_ms), AVG(tls_ms), AVG(ttfb_ms), AVG(transfer_ms),
+                    MAX(total_ms), MAX(dns_ms), MAX(tcp_ms), MAX(tls_ms), MAX(ttfb_ms), MAX(transfer_ms),
+                    MIN(total_ms), MIN(dns_ms), MIN(tcp_ms), MIN(tls_ms), MIN(ttfb_ms), MIN(transfer_ms)
+                FROM records {where_clause}
+            """, params)
+            row = cursor.fetchone()
+
         if row and row[0] is not None:
             averages = {
                 "total": round(row[0], 2), "dns": round(row[1], 2), "tcp": round(row[2], 2),

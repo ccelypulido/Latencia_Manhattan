@@ -499,18 +499,58 @@ function initCharts() {
                 label: 'Promedio (ms)',
                 data: [0, 0, 0, 0, 0],
                 backgroundColor: [
+                    'rgba(6, 182, 212, 0.85)',
+                    'rgba(192, 132, 252, 0.85)',
+                    'rgba(251, 191, 36, 0.85)',
+                    'rgba(52, 211, 153, 0.85)',
+                    'rgba(56, 189, 248, 0.85)'
+                ],
+                borderColor: [
                     '#06b6d4',
                     '#c084fc',
                     '#fbbf24',
                     '#34d399',
                     '#38bdf8'
                 ],
+                borderWidth: 1,
                 borderRadius: 6
             }]
         },
         options: {
-            ...chartOptionsBase,
-            indexAxis: 'y'
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleFont: { family: 'Inter', size: 13 },
+                    bodyFont: { family: 'JetBrains Mono', size: 12 },
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: function(context) {
+                            return ` Promedio: ${context.parsed.y} ms`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11, weight: '500' } }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.06)' },
+                    ticks: { 
+                        color: '#94a3b8', 
+                        font: { family: 'JetBrains Mono', size: 11 },
+                        callback: function(value) {
+                            return value + ' ms';
+                        }
+                    }
+                }
+            }
         }
     });
 }
@@ -539,11 +579,11 @@ function updateTimelineChart(records) {
 function updatePhaseBarChart(averages) {
     if (!chartPhaseBarInstance || !averages) return;
     chartPhaseBarInstance.data.datasets[0].data = [
-        averages.dns || 0,
-        averages.tcp || 0,
-        averages.tls || 0,
-        averages.ttfb || 0,
-        averages.transfer || 0
+        Number(averages.dns) || 0,
+        Number(averages.tcp) || 0,
+        Number(averages.tls) || 0,
+        Number(averages.ttfb) || 0,
+        Number(averages.transfer) || 0
     ];
     chartPhaseBarInstance.update();
 }
