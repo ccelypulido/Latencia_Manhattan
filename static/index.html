@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manhattan Latency Analyzer | Análisis de Latencia por Sedes</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Top Navbar / Header -->
+        <header class="navbar">
+            <div class="brand">
+                <div class="logo-icon">
+                    <i data-lucide="activity"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>Manhattan Latency Analyzer</h1>
+                    <span class="sub-title">Monitoreo de conectividad, DNS y tiempo de servidor por Sedes</span>
+                </div>
+            </div>
+
+            <div class="header-status-panel">
+                <!-- Location Tag Badge -->
+                <div class="location-badge" title="Sede / Ubicación actual configurada">
+                    <i data-lucide="map-pin"></i>
+                    <span id="currentLocationBadge">Sede Principal</span>
+                </div>
+                <div class="url-badge" title="URL bajo monitoreo">
+                    <i data-lucide="globe"></i>
+                    <span id="targetUrlBadge">https://alkop.sce.manh.com/ping</span>
+                </div>
+                <div class="status-indicator" id="monitorStatus">
+                    <span class="status-dot pulsing"></span>
+                    <span class="status-label">Monitoreando</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button id="btnProbeNow" class="btn btn-primary" title="Ejecutar prueba de latencia inmediata">
+                    <i data-lucide="zap"></i> Probar Ahora
+                </button>
+                <button id="btnOpenConfig" class="btn btn-secondary" title="Configurar parámetros y Sede">
+                    <i data-lucide="settings"></i> Configuración
+                </button>
+                <button id="btnExport" class="btn btn-outline" title="Descargar histórico en CSV">
+                    <i data-lucide="download"></i> Exportar
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-container">
+
+            <!-- Global Location Filter Toolbar -->
+            <section class="toolbar-panel glow-card">
+                <div class="toolbar-content">
+                    <div class="toolbar-group">
+                        <label for="filterLocationSelect"><i data-lucide="map-pin"></i> Filtrar por Sede / Ubicación:</label>
+                        <select id="filterLocationSelect" class="form-select font-bold">
+                            <option value="all">Todas las Sedes</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-info text-muted">
+                        <span>Los resultados, promedios y gráficos responderán al filtro seleccionado.</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Metrics Summary Cards -->
+            <section class="metrics-grid">
+                <!-- Total Latency Card -->
+                <div class="metric-card primary-accent">
+                    <div class="card-header">
+                        <span class="card-title"><i data-lucide="clock"></i> Latencia Total Promedio</span>
+                        <span class="badge badge-blue">Global</span>
+                    </div>
+                    <div class="card-value-container">
+                        <span class="metric-number" id="valAvgTotal">--</span>
+                        <span class="metric-unit">ms</span>
+                    </div>
+                    <div class="card-footer">
+                        <span>Min: <strong id="valMinTotal">-- ms</strong></span>
+                        <span class="separator">•</span>
+                        <span>Max Pico: <strong id="valMaxTotal" class="text-danger">-- ms</strong></span>
+                    </div>
+                </div>
+
+                <!-- DNS Resolution Card -->
+                <div class="metric-card cyan-accent">
+                    <div class="card-header">
+                        <span class="card-title"><i data-lucide="server"></i> Resolución DNS</span>
+                        <span class="badge badge-cyan">Fase 1</span>
+                    </div>
+                    <div class="card-value-container">
+                        <span class="metric-number" id="valAvgDNS">--</span>
+                        <span class="metric-unit">ms</span>
+                    </div>
+                    <div class="card-footer">
+                        <span>Min: <strong id="valMinDNS">-- ms</strong></span>
+                        <span class="separator">•</span>
+                        <span>Pico: <strong id="valMaxDNS">-- ms</strong></span>
+                    </div>
+                </div>
+
+                <!-- TCP Connection Card -->
+                <div class="metric-card purple-accent">
+                    <div class="card-header">
+                        <span class="card-title"><i data-lucide="network"></i> Conexión TCP</span>
+                        <span class="badge badge-purple">Fase 2</span>
+                    </div>
+                    <div class="card-value-container">
+                        <span class="metric-number" id="valAvgTCP">--</span>
+                        <span class="metric-unit">ms</span>
+                    </div>
+                    <div class="card-footer">
+                        <span>Min: <strong id="valMinTCP">-- ms</strong></span>
+                        <span class="separator">•</span>
+                        <span>Pico: <strong id="valMaxTCP">-- ms</strong></span>
+                    </div>
+                </div>
+
+                <!-- TLS Handshake Card -->
+                <div class="metric-card amber-accent">
+                    <div class="card-header">
+                        <span class="card-title"><i data-lucide="lock"></i> Negotiation TLS / SSL</span>
+                        <span class="badge badge-amber">Fase 3</span>
+                    </div>
+                    <div class="card-value-container">
+                        <span class="metric-number" id="valAvgTLS">--</span>
+                        <span class="metric-unit">ms</span>
+                    </div>
+                    <div class="card-footer">
+                        <span>Min: <strong id="valMinTLS">-- ms</strong></span>
+                        <span class="separator">•</span>
+                        <span>Pico: <strong id="valMaxTLS">-- ms</strong></span>
+                    </div>
+                </div>
+
+                <!-- Server TTFB Card -->
+                <div class="metric-card emerald-accent">
+                    <div class="card-header">
+                        <span class="card-title"><i data-lucide="cpu"></i> Espera Servidor (TTFB)</span>
+                        <span class="badge badge-emerald">Fase 4</span>
+                    </div>
+                    <div class="card-value-container">
+                        <span class="metric-number" id="valAvgTTFB">--</span>
+                        <span class="metric-unit">ms</span>
+                    </div>
+                    <div class="card-footer">
+                        <span>Min: <strong id="valMinTTFB">-- ms</strong></span>
+                        <span class="separator">•</span>
+                        <span>Pico: <strong id="valMaxTTFB">-- ms</strong></span>
+                    </div>
+                </div>
+
+                <!-- Percentiles & Uptime Card -->
+                <div class="metric-card rose-accent">
+                    <div class="card-header">
+                        <span class="card-title"><i data-lucide="bar-chart-3"></i> Valores Pico & Uptime</span>
+                        <span class="badge badge-rose">Estadística</span>
+                    </div>
+                    <div class="stat-rows">
+                        <div class="stat-row">
+                            <span>Percentil P95:</span>
+                            <strong id="valP95">-- ms</strong>
+                        </div>
+                        <div class="stat-row">
+                            <span>Percentil P99:</span>
+                            <strong id="valP99">-- ms</strong>
+                        </div>
+                        <div class="stat-row">
+                            <span>Jitter (StdDev):</span>
+                            <strong id="valJitter">-- ms</strong>
+                        </div>
+                        <div class="stat-row">
+                            <span>Disponibilidad:</span>
+                            <strong id="valUptime" class="text-success">--%</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cross Location Comparison Panel -->
+            <section class="panel-card glow-card" id="locationComparisonSection">
+                <div class="panel-header">
+                    <h2><i data-lucide="git-compare"></i> Comparativa de Latencias entre Sedes</h2>
+                    <p class="chart-subtitle">Resumen promedio de rendimiento por ubicación registrada</p>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Sede / Ubicación</th>
+                                <th>Muestras</th>
+                                <th>DNS Promedio</th>
+                                <th>TCP Promedio</th>
+                                <th>TLS Promedio</th>
+                                <th>TTFB Servidor</th>
+                                <th>Latencia Total Prom.</th>
+                                <th>Pico Máximo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="locationComparisonBody">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">Cargando comparativa de sedes...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Interactive Charts Section -->
+            <section class="charts-grid">
+                <!-- Stacked Breakdown Chart -->
+                <div class="chart-container-card glow-card">
+                    <div class="chart-header">
+                        <div>
+                            <h2>Desglose Temporal por Componente (DNS + TCP + TLS + TTFB)</h2>
+                            <p class="chart-subtitle">Permite identificar exactamente qué fase ocasiona latencias o retrasos</p>
+                        </div>
+                        <div class="chart-legend-pills">
+                            <span class="pill-legend dns-pill">DNS</span>
+                            <span class="pill-legend tcp-pill">TCP</span>
+                            <span class="pill-legend tls-pill">TLS</span>
+                            <span class="pill-legend ttfb-pill">TTFB Servidor</span>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="chartBreakdown"></canvas>
+                    </div>
+                </div>
+
+                <!-- Total Latency Timeline & Peaks Chart -->
+                <div class="chart-container-card glow-card">
+                    <div class="chart-header">
+                        <div>
+                            <h2>Histórico de Latencia Total y Detección de Picos</h2>
+                            <p class="chart-subtitle">Línea de tiempo continua con límites de tiempo promedio y máximos</p>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="chartTimeline"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Phase Comparison & Status Code Summary -->
+            <section class="secondary-grid">
+                <div class="chart-container-card flex-1">
+                    <div class="chart-header">
+                        <h2>Comparativa Promedio por Fase de Conexión (ms)</h2>
+                    </div>
+                    <div class="chart-wrapper-sm">
+                        <canvas id="chartPhaseBar"></canvas>
+                    </div>
+                </div>
+
+                <div class="panel-card flex-1">
+                    <div class="panel-header">
+                        <h2><i data-lucide="pie-chart"></i> Resumen de Respuestas HTTP</h2>
+                    </div>
+                    <div class="status-summary-content" id="statusCodesContainer">
+                        <div class="empty-state">No hay datos disponibles</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Historical Log Table -->
+            <section class="history-section glow-card">
+                <div class="table-header-panel">
+                    <div class="table-title">
+                        <h2><i data-lucide="database"></i> Histórico de Mediciones de Latencia</h2>
+                        <span class="record-counter" id="recordCounter">0 registros</span>
+                    </div>
+
+                    <div class="table-actions">
+                        <select id="filterStatus" class="form-select">
+                            <option value="all">Todos los estados</option>
+                            <option value="success">Exitosos (2xx/3xx/4xx/5xx)</option>
+                            <option value="error">Errores de Red / Timeout</option>
+                        </select>
+                        <button id="btnClearHistory" class="btn btn-sm btn-danger">
+                            <i data-lucide="trash-2"></i> Limpiar Histórico
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th># ID</th>
+                                <th>Fecha & Hora</th>
+                                <th>Sede / Ubicación</th>
+                                <th>IP Resuelta</th>
+                                <th>Estado HTTP</th>
+                                <th>DNS (ms)</th>
+                                <th>TCP (ms)</th>
+                                <th>TLS (ms)</th>
+                                <th>TTFB (ms)</th>
+                                <th>Total (ms)</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr>
+                                <td colspan="11" class="text-center">Cargando registros...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Configuration Modal -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2><i data-lucide="sliders"></i> Configuración de Monitoreo</h2>
+                <button class="modal-close" id="btnCloseConfig">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="cfgLocationName">Nombre de la Sede / Ubicación Actual:</label>
+                    <input type="text" id="cfgLocationName" class="form-input font-bold" placeholder="Ej: Sede Principal - Bogotá, Sede Medellín, Home Office">
+                    <small class="form-help">Etiqueta asignada a las mediciones realizadas desde este equipo/equipo local.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="cfgTargetUrl">URL de Destino:</label>
+                    <input type="url" id="cfgTargetUrl" class="form-input" placeholder="https://alkop.sce.manh.com/ping">
+                    <small class="form-help">URL HTTPS/HTTP a la cual se enviarán los pings continuos.</small>
+                </div>
+
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="cfgInterval">Frecuencia de Ping (segundos):</label>
+                        <input type="number" id="cfgInterval" class="form-input" min="2" max="3600" value="10">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cfgTimeout">Timeout Máximo (segundos):</label>
+                        <input type="number" id="cfgTimeout" class="form-input" min="1" max="60" value="5">
+                    </div>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <label class="switch">
+                        <input type="checkbox" id="cfgAutoEnabled" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="switch-label">Habilitar monitoreo continuo en segundo plano</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnSaveConfig" class="btn btn-primary"><i data-lucide="save"></i> Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2><i data-lucide="info"></i> Detalle de Medición</h2>
+                <button class="modal-close" id="btnCloseDetail">&times;</button>
+            </div>
+            <div class="modal-body" id="detailModalBody">
+                <!-- Content injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

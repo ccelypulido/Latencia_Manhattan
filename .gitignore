@@ -1,0 +1,22 @@
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+latency_history.db
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Environment & IDE
+.venv
+env/
+venv/
+.vscode/
+.idea/
