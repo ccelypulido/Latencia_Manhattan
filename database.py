@@ -298,8 +298,11 @@ def set_config_key(key: str, value: str):
         cursor.execute("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (key, str(value)))
         conn.commit()
 
-def clear_records():
+def clear_records(location_filter: Optional[str] = None):
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM records")
+        if location_filter and location_filter != 'all':
+            cursor.execute("DELETE FROM records WHERE location = ?", (location_filter,))
+        else:
+            cursor.execute("DELETE FROM records")
         conn.commit()

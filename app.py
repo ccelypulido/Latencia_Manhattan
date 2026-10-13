@@ -185,7 +185,9 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             return self.send_json({"success": True, "config": database.get_config()})
 
         elif path == "/api/clear":
-            database.clear_records()
+            query = urllib.parse.parse_qs(parsed.query)
+            location_filter = payload.get("location") or query.get("location", [None])[0]
+            database.clear_records(location_filter=location_filter)
             return self.send_json({"success": True, "message": "History cleared successfully"})
 
         self.send_error(404, "Endpoint not found")

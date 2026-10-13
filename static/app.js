@@ -50,11 +50,25 @@ function setupEventListeners() {
 
     // Clear History
     document.getElementById('btnClearHistory').addEventListener('click', async () => {
-        if (confirm('¿Está seguro de que desea eliminar todos los registros históricos?')) {
+        const loc = document.getElementById('filterLocationSelect').value;
+        const isSpecific = loc && loc !== 'all';
+        const msg = isSpecific
+            ? `¿Está seguro de que desea eliminar todos los registros históricos de la sede "${loc}"?`
+            : '¿Está seguro de que desea eliminar todos los registros históricos de todas las sedes?';
+
+        if (confirm(msg)) {
             try {
-                await fetch('/api/clear', { method: 'POST' });
+                let url = '/api/clear';
+                if (isSpecific) {
+                    url += `?location=${encodeURIComponent(loc)}`;
+                }
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(isSpecific ? { location: loc } : {})
+                });
+                await fetchLocations();
                 refreshAllData();
-                fetchLocations();
             } catch (err) {
                 alert('Error al borrar el histórico: ' + err);
             }
