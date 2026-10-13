@@ -145,8 +145,16 @@ def measure_latency(url: str, timeout: float = 10.0, auth_config: Optional[Dict[
                 creds = base64.b64encode(f"{full_user}:{password}".encode('utf-8')).decode('ascii')
                 extra_headers += f"Authorization: Basic {creds}\r\n"
             elif auth_type == 'bearer' and token:
-                auth_val = token if token.lower().startswith('bearer ') else f"Bearer {token}"
-                extra_headers += f"Authorization: {auth_val}\r\n"
+                token_clean = token.strip()
+                if token_clean.lower().startswith('cookie:'):
+                    extra_headers += token_clean + '\r\n'
+                elif token_clean.lower().startswith('authorization:'):
+                    extra_headers += token_clean + '\r\n'
+                elif '=' in token_clean and (';' in token_clean or not token_clean.lower().startswith('bearer ')):
+                    extra_headers += 'Cookie: ' + token_clean + '\r\n'
+                else:
+                    auth_val = token_clean if token_clean.lower().startswith('bearer ') else 'Bearer ' + token_clean
+                    extra_headers += 'Authorization: ' + auth_val + '\r\n'
 
         if auth_enabled and auth_type == 'ntlm' and (user or password):
             # Step 1: Send NTLM Type 1 Negotiate Header

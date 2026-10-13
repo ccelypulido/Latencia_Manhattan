@@ -379,7 +379,7 @@
                         <select id="cfgAuthType" class="form-select font-bold">
                             <option value="ntlm">NTLM v2 (Active Directory / Dominio Windows)</option>
                             <option value="basic">HTTP Basic Auth (Usuario y Contraseña)</option>
-                            <option value="bearer">Bearer Token / Header de Autorización</option>
+                            <option value="bearer">Bearer Token / Cookie de Sesión (MFA Microsoft / Navegador)</option>
                         </select>
                     </div>
 
@@ -402,7 +402,7 @@
 
                     <div class="form-group" id="tokenGroup" style="display: none;">
                         <label for="cfgAuthToken">Token de Autorización / Cookie:</label>
-                        <input type="text" id="cfgAuthToken" class="form-input" placeholder="Bearer eyJhbGciOi...">
+                        <input type="text" id="cfgAuthToken" class="form-input" placeholder="Ej: FedAuth=...; o JSESSIONID=... o Bearer eyJ...">
                     </div>
                 </div>
             </div>
