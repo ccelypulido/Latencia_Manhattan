@@ -43,38 +43,28 @@ sequenceDiagram
     participant DNS as Servidor DNS
     participant Servidor as Servidor Web / Proxy (Manhattan)
     
-    rect rgb(20, 35, 60)
     Note over Cliente,DNS: Fase 1: Resolución DNS (dns_ms)
     Cliente->>DNS: Consulta A Record (alkop.sce.manh.com)
     DNS-->>Cliente: Respuesta IP (136.68.87.180)
-    end
 
-    rect rgb(30, 25, 55)
     Note over Cliente,Servidor: Fase 2: Handshake TCP (tcp_ms) - Capa de Transporte
     Cliente->>Servidor: SYN
     Servidor-->>Cliente: SYN-ACK
     Cliente->>Servidor: ACK (Socket conectado)
-    end
 
-    rect rgb(45, 35, 20)
     Note over Cliente,Servidor: Fase 3: Handshake TLS / SSL (tls_ms) - Capa Criptográfica
     Cliente->>Servidor: ClientHello (Ciphers, TLS Version)
     Servidor-->>Cliente: ServerHello + Certificado Digital + Key Exchange
     Cliente->>Servidor: Key Exchange + Finished (Canal Cifrado Establecido)
-    end
 
-    rect rgb(15, 45, 35)
     Note over Cliente,Servidor: Fase 4: Solicitud HTTP y Espera (ttfb_ms) - Capa de Aplicación
     Cliente->>Servidor: GET /ping HTTP/1.1 (Headers, Auth/Cookies)
     Note over Servidor: Servidor procesa solicitud, evalúa autenticación y backend
     Servidor-->>Cliente: Primer Byte de Respuesta (HTTP/1.1 200 OK)
-    end
 
-    rect rgb(20, 40, 50)
     Note over Cliente,Servidor: Fase 5: Descarga de Datos (transfer_ms)
     Servidor-->>Cliente: Chunks restantes del cuerpo de respuesta (Body)
     Cliente->>Servidor: Cierre de conexión (FIN/ACK)
-    end
 ```
 
 ---
