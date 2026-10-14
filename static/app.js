@@ -27,6 +27,7 @@ function initLucideIcons() {
 
 // Event Listeners setup
 function setupEventListeners() {
+    initHelpSystem();
     // Manual Probe Trigger
     document.getElementById('btnProbeNow').addEventListener('click', runManualProbe);
 
@@ -640,4 +641,357 @@ function updatePhaseBarChart(averages) {
         Number(averages.transfer) || 0
     ];
     chartPhaseBarInstance.update();
+}
+
+
+// ==========================================================================
+// Interactive Help System & Technical Topics Dictionary
+// ==========================================================================
+
+const HELP_TOPICS = {
+    'total': {
+        title: 'Latencia Total Promedio',
+        subtitle: 'Tiempo Acumulado End-to-End',
+        badgeClass: 'badge-blue',
+        badgeText: 'Métrica Global',
+        icon: 'clock',
+        layer: 'Capa 1 a 7 (Extremo a Extremo)',
+        mechanism: 'T_Total = T_DNS + T_TCP + T_TLS + T_TTFB + T_Transfer',
+        description: 'Mide el tiempo total acumulado desde que se inicia la resolución del nombre de dominio hasta que el cliente recibe y descarga completamente la respuesta HTTP devuelta por el servidor de Manhattan. Es la suma estrictamente secuencial y desacoplada de cada fase.',
+        benchmarks: [
+            { label: 'Excelente', range: '< 450 ms', type: 'good', desc: 'Respuesta fluida para terminales RF y estaciones de empaque.' },
+            { label: 'Aceptable', range: '450 - 800 ms', type: 'warn', desc: 'Leve retraso perceptible en operaciones de alta velocidad.' },
+            { label: 'Crítico', range: '> 800 ms', type: 'crit', desc: 'Riesgo inminente de congelamiento o timeout en bodega.' }
+        ],
+        troubleshooting: 'Si la latencia total es elevada, inspecciona el gráfico de Desglose Temporal Apilado para identificar cuál de las 4 fases (DNS, TCP, TLS o TTFB) causó el incremento.',
+        recommendation: 'Aísla el problema: si TCP es alto el problema es del enlace/ISP; si TTFB es alto el problema es del servidor de Manhattan.',
+        guideTab: 'tab-methodology'
+    },
+    'dns': {
+        title: 'Fase 1: Resolución DNS',
+        subtitle: 'Traducción de Dominio a Dirección IP',
+        badgeClass: 'badge-cyan',
+        badgeText: 'Fase 1',
+        icon: 'server',
+        layer: 'Capa de Aplicación (UDP puerto 53)',
+        mechanism: 'socket.gethostbyname(hostname)',
+        description: 'Tiempo requerido por el sistema operativo para consultar a los servidores DNS locales o corporativos y obtener la IP pública destino (ej. 136.68.87.180). Esta prueba se realiza en cada ciclo para auditar la salud del resolver.',
+        benchmarks: [
+            { label: 'Excelente', range: '< 15 ms', type: 'good', desc: 'Resuelto desde caché local o DNS de alta proximidad.' },
+            { label: 'Aceptable', range: '15 - 50 ms', type: 'warn', desc: 'Consulta recursiva con latencia de red aceptable.' },
+            { label: 'Lento', range: '> 50 ms', type: 'crit', desc: 'Servidor DNS saturado o reintentos por pérdida UDP.' }
+        ],
+        troubleshooting: 'Un DNS alto suele deberse a saturación en el servidor DNS corporativo de la sede, ruteo ineficiente hacia los DNS forwarders o problemas con el controlador de dominio Active Directory.',
+        recommendation: 'Verifica la configuración de DNS primario y secundario en la interfaz de red de la sede o configura reenviadores con menor RTT.',
+        guideTab: 'tab-flow'
+    },
+    'tcp': {
+        title: 'Fase 2: Conexión TCP (3-Way Handshake)',
+        subtitle: 'Establecimiento del Socket de Transporte Confiable',
+        badgeClass: 'badge-purple',
+        badgeText: 'Fase 2',
+        icon: 'network',
+        layer: 'Capa de Transporte (TCP)',
+        mechanism: 'sock.connect((ip, port)) [SYN → SYN-ACK → ACK]',
+        description: 'Mide el tiempo exacto del 3-Way Handshake a nivel de socket. Es la medida más pura de la latencia física de ida y vuelta de red (1 RTT) entre la sede y el balanceador/datacenter de Manhattan, totalmente independiente del software o backend.',
+        benchmarks: [
+            { label: 'Excelente', range: '< 75 ms', type: 'good', desc: 'Canal de fibra óptimo y ruteo directo hacia el datacenter.' },
+            { label: 'Aceptable', range: '75 - 120 ms', type: 'warn', desc: 'Latencia típica WAN según la distancia geográfica.' },
+            { label: 'Degradado', range: '> 120 ms', type: 'crit', desc: 'Congestión en el ISP, ruteo BGP subóptimo o enlace saturado.' }
+        ],
+        troubleshooting: 'Si TCP sube repentinamente mientras DNS está bajo, el origen es 100% de la red física, saturación del canal WAN de la sede o problemas en el proveedor de internet (ISP).',
+        recommendation: 'Ejecuta pruebas de MTR o traceroute hacia la IP destino para localizar el salto (hop) donde se introduce la latencia.',
+        guideTab: 'tab-devtools'
+    },
+    'tls': {
+        title: 'Fase 3: Negociación TLS / SSL Handshake',
+        subtitle: 'Seguridad, Certificados x509 y Cifrado',
+        badgeClass: 'badge-amber',
+        badgeText: 'Fase 3',
+        icon: 'lock',
+        layer: 'Capa de Seguridad / Presentación (TLS 1.2/1.3)',
+        mechanism: 'ssl_context.wrap_socket(sock, hostname)',
+        description: 'Sobre el socket TCP ya establecido, mide la negociación del canal cifrado HTTPS: intercambio de certificados del servidor Manhattan, validación de la cadena de confianza y generación de llaves de cifrado simétrico (1 a 2 RTTs + cómputo criptográfico de CPU).',
+        benchmarks: [
+            { label: 'Excelente', range: '< 85 ms', type: 'good', desc: 'Negociación TLS ágil con cipher suites eficientes.' },
+            { label: 'Aceptable', range: '85 - 150 ms', type: 'warn', desc: 'Handshake normal para certificados con cadenas intermedias.' },
+            { label: 'Lento', range: '> 150 ms', type: 'crit', desc: 'Sobrecarga de CPU en el terminador SSL o validación CRL lenta.' }
+        ],
+        troubleshooting: 'Si TCP es bajo pero TLS es alto, la red está sana pero el servidor web o balanceador de Manhattan está saturado negociando conexiones seguras o validando revocación de certificados.',
+        recommendation: 'Nota: En Chrome DevTools esta métrica se agrupa visualmente dentro de "Initial Connection". Nuestro analizador la aísla para diferenciar problemas de red física de los criptográficos.',
+        guideTab: 'tab-devtools'
+    },
+    'ttfb': {
+        title: 'Fase 4: Espera del Servidor (Time To First Byte)',
+        subtitle: 'Tiempo de Procesamiento en el Backend Manhattan',
+        badgeClass: 'badge-emerald',
+        badgeText: 'Fase 4',
+        icon: 'cpu',
+        layer: 'Capa de Aplicación (HTTP/1.1)',
+        mechanism: 'sock.sendall() → sock.recv(1)',
+        description: 'Mide el lapso desde que la petición HTTP (con cabeceras y cookies de sesión) se envía al socket hasta que llega el primer byte de respuesta del servidor. Es el indicador directo del tiempo de cálculo y procesamiento interno de la aplicación Manhattan.',
+        benchmarks: [
+            { label: 'Excelente', range: '< 300 ms', type: 'good', desc: 'Servidor ágil con baja carga en el motor de Manhattan.' },
+            { label: 'Aceptable', range: '300 - 500 ms', type: 'warn', desc: 'Carga moderada en la aplicación o validación de tokens.' },
+            { label: 'Saturado', range: '> 500 ms', type: 'crit', desc: 'Cuello de botella en base de datos o backend sobrecargado.' }
+        ],
+        troubleshooting: 'Si TCP y TLS son rápidos pero TTFB es alto, la red de la sede está perfecta: la demora reside exclusivamente en el procesamiento interno de Manhattan o en el servicio de autenticación.',
+        recommendation: 'Si se utiliza autenticación por cookies/MFA, el servidor ejecuta la lógica completa del endpoint. Si se hace anónimo, responderá más rápido con 401/403.',
+        guideTab: 'tab-troubleshoot'
+    },
+    'stats': {
+        title: 'Percentiles (P95, P99) y Jitter',
+        subtitle: 'Estabilidad Temporal para SLAs de Misión Crítica',
+        badgeClass: 'badge-rose',
+        badgeText: 'Estadística',
+        icon: 'bar-chart-3',
+        layer: 'Análisis Estadístico Multimuestra',
+        mechanism: 'Percentil P95 / P99 y Desviación Estándar',
+        description: 'Los promedios aritméticos pueden maquillar picos de latencia graves (un promedio de 250 ms puede esconder caídas periódicas de 3000 ms). El P95 garantiza que el 95% de las transacciones respondieron dentro de ese margen. El Jitter evalúa la estabilidad del canal.',
+        benchmarks: [
+            { label: 'Jitter Estable', range: '< 15 ms', type: 'good', desc: 'Canal de transmisión homogéneo y predecible.' },
+            { label: 'Jitter Moderado', range: '15 - 40 ms', type: 'warn', desc: 'Fluctuaciones tolerables típicas de redes Wi-Fi.' },
+            { label: 'Jitter Crítico', range: '> 40 ms', type: 'crit', desc: 'Inestabilidad severa de red, microcortes y bufferbloat.' }
+        ],
+        troubleshooting: 'Un Jitter alto indica congestión intermitente por ráfagas de tráfico, colisiones en enlaces Wi-Fi o retransmisiones en el router de la sede.',
+        recommendation: 'Para acordar niveles de servicio (SLA) con el proveedor de internet o TI, utiliza siempre el percentil P95 en lugar de la media aritmética.',
+        guideTab: 'tab-stats'
+    },
+    'locations': {
+        title: 'Aislamiento y Gestión por Sedes',
+        subtitle: 'Location Tagging para Auditorías Multisede',
+        badgeClass: 'badge-purple',
+        badgeText: 'Ubicaciones',
+        icon: 'map-pin',
+        layer: 'Gestión de Contexto y Persistencia',
+        mechanism: 'SQLite location column + ISO 8601 timestamps',
+        description: 'Permite desplegar o auditar el analizador desde diferentes sucursales (Bogotá, Medellín, Cali, Home Office) o en diferentes días sin mezclar resultados. Cada registro queda etiquetado con su sede.',
+        benchmarks: [
+            { label: 'Filtro Reactivo', range: 'Global', type: 'good', desc: 'Métricas, tablas y gráficos responden al filtro de sede.' },
+            { label: 'Limpieza Contextual', range: 'Segura', type: 'good', desc: 'El botón Limpiar Histórico solo borra la sede filtrada.' }
+        ],
+        troubleshooting: 'Si deseas auditar una sede diferente, cámbiala en el menú Configuración antes de iniciar las pruebas para que los registros futuros adopten la nueva etiqueta.',
+        recommendation: 'Utiliza el botón "Exportar" para descargar en CSV los resultados de una sede específica y entregar informes independientes por oficina.',
+        guideTab: 'tab-locations'
+    },
+    'comparison': {
+        title: 'Comparativa entre Sedes',
+        subtitle: 'Auditoría de Rendimiento Relativo',
+        badgeClass: 'badge-blue',
+        badgeText: 'Benchmark',
+        icon: 'git-compare',
+        layer: 'Inteligencia de Datos Agrupados',
+        mechanism: 'GROUP BY location (Averages, Peaks, Samples)',
+        description: 'Contrasta de forma simultánea el rendimiento de cada sede registrada. Permite descubrir de inmediato cuál sucursal tiene el enlace más lento (TCP más alto), cuál tiene mejor resolución DNS y comparar los picos de cada bodega.',
+        benchmarks: [
+            { label: 'Equilibrio Ideal', range: 'Delta < 20%', type: 'good', desc: 'Todas las sedes operan con tiempos homogéneos.' },
+            { label: 'Desviación Notoria', range: 'Delta > 40%', type: 'warn', desc: 'Una sede presenta un enlace sustancialmente más lento.' }
+        ],
+        troubleshooting: 'Si una sede específica tiene un TCP significativamente más alto que las demás, el problema es su proveedor de internet local o la distancia geográfica al servidor de Manhattan.',
+        recommendation: 'Revisa periódicamente esta tabla para justificar upgrades de enlace de red en las sedes con mayor latencia.',
+        guideTab: 'tab-locations'
+    },
+    'chart-breakdown': {
+        title: 'Desglose Temporal por Componente (Stacked)',
+        subtitle: 'Gráfico de Áreas Apiladas (DNS + TCP + TLS + TTFB)',
+        badgeClass: 'badge-cyan',
+        badgeText: 'Visualización',
+        icon: 'activity',
+        layer: 'Capa Gráfica Analítica',
+        mechanism: 'Chart.js Stacked Line Dataset',
+        description: 'Permite identificar visualmente qué componente específico ocasiona una lentitud. Al apilar las 4 fases secuenciales en bandas de colores (Cian para DNS, Púrpura para TCP, Ámbar para TLS y Esmeralda para TTFB), cualquier retraso ensancha de inmediato la banda de la fase culpable.',
+        benchmarks: [
+            { label: 'Banda Dominante Normal', range: 'TTFB', type: 'good', desc: 'Es normal que la espera del servidor ocupe la mayor porción.' },
+            { label: 'Banda Anómala', range: 'TCP / TLS', type: 'warn', desc: 'Si TCP o TLS crecen, el cuello de botella es de red o SSL.' }
+        ],
+        troubleshooting: 'Al pasar el cursor sobre cualquier punto del gráfico, el tooltip revela el desglose exacto en milisegundos de cada fase en esa petición puntual.',
+        recommendation: 'Úsalo para responder rápidamente a reportes de "el sistema se puso lento a las 10:30 am": podrás ver exactamente qué banda se elevó en ese minuto.',
+        guideTab: 'tab-flow'
+    },
+    'chart-timeline': {
+        title: 'Histórico de Latencia Total y Picos',
+        subtitle: 'Línea de Tiempo Continua',
+        badgeClass: 'badge-blue',
+        badgeText: 'Tendencia',
+        icon: 'trending-up',
+        layer: 'Monitoreo de Tendencia Temporal',
+        mechanism: 'Chart.js Smooth Line with Hover Inspection',
+        description: 'Registra la curva cronológica continua de la latencia total. Es fundamental para detectar degradaciones progresivas del servicio, horarios pico de saturación en la bodega o microcortes de red.',
+        benchmarks: [
+            { label: 'Curva Plana', range: 'Óptimo', type: 'good', desc: 'Comportamiento predecible sin fluctuaciones.' },
+            { label: 'Picos Aislados', range: 'Revisar', type: 'warn', desc: 'Micro-bursts esporádicos o renegociaciones de sesión.' }
+        ],
+        troubleshooting: 'Compara los picos con los momentos de mayor volumen de escaneo o sincronizaciones masivas de pedidos en el centro de distribución.',
+        recommendation: 'Haz clic en cualquier registro correspondiente en la tabla inferior para ver el detalle de esa petición en particular.',
+        guideTab: 'tab-flow'
+    },
+    'chart-phases': {
+        title: 'Comparativa Promedio por Fase de Conexión',
+        subtitle: 'Distribución Relativa en Barras (ms)',
+        badgeClass: 'badge-amber',
+        badgeText: 'Distribución',
+        icon: 'bar-chart',
+        layer: 'Resumen Global de Fases',
+        mechanism: 'Chart.js Bar Chart with dynamic Zero-Scale',
+        description: 'Muestra en barras verticales el tiempo promedio exacto consumido por cada una de las 5 fases de conexión. Proporciona una vista macro para responder de un vistazo: ¿la mayor parte del tiempo se va en la red (TCP) o en el servidor (TTFB)?',
+        benchmarks: [
+            { label: 'Proporción Sana', range: 'Red < 35%', type: 'good', desc: 'El canal de red y SSL toma menos de un tercio del tiempo total.' },
+            { label: 'Red Saturada', range: 'Red > 60%', type: 'crit', desc: 'La infraestructura de red física está dominando la latencia.' }
+        ],
+        troubleshooting: 'Compara el tamaño de la barra TCP vs la barra TTFB para direccionar el caso de soporte al equipo correcto (Redes vs Aplicaciones).',
+        recommendation: 'Si la barra Transferencia es alta, verifica el tamaño de respuesta en bytes de la URL auditada.',
+        guideTab: 'tab-methodology'
+    },
+    'http-status': {
+        title: 'Resumen de Respuestas HTTP',
+        subtitle: 'Distribución de Códigos de Estado y Salud',
+        badgeClass: 'badge-emerald',
+        badgeText: 'Salud HTTP',
+        icon: 'pie-chart',
+        layer: 'Capa de Aplicación (Estado RFC 7231)',
+        mechanism: 'Agrupación por status_code en SQLite',
+        description: 'Informa la distribución de códigos HTTP devueltos por el endpoint: HTTP 200 (Éxito autenticado), HTTP 401/403 (Requiere autenticación de dominio o cookie MFA), HTTP 5xx (Error interno en servidores Manhattan) o Error 0 (Falla de red o Timeout).',
+        benchmarks: [
+            { label: 'HTTP 200 OK', range: '100% deseable', type: 'good', desc: 'Sesión autenticada y servidor operativo.' },
+            { label: 'HTTP 401 / 403', range: 'Esperado si no hay auth', type: 'warn', desc: 'El endpoint responde pero requiere credenciales de dominio.' },
+            { label: 'Errores / Timeout', range: '0% deseable', type: 'crit', desc: 'Pérdida de paquetes o servidor caído.' }
+        ],
+        troubleshooting: 'Si recibes HTTP 403, puedes configurar la autenticación en "Configuración" pegando la Cookie de tu sesión de navegador tras el login con MFA.',
+        recommendation: 'Consulta la pestaña "6. Autenticación & MFA" en la Guía Técnica para ver el tutorial de cómo extraer la cookie con F12 en Chrome.',
+        guideTab: 'tab-auth'
+    },
+    'history-table': {
+        title: 'Histórico y Auditoría de Mediciones',
+        subtitle: 'Registro Transaccional Muestra por Muestra',
+        badgeClass: 'badge-purple',
+        badgeText: 'Auditoría',
+        icon: 'database',
+        layer: 'Persistencia en Base de Datos SQLite',
+        mechanism: 'SELECT * FROM records ORDER BY id DESC',
+        description: 'Tabla transaccional que documenta cada una de las pruebas de latencia realizadas. Incluye ID único, fecha/hora local, sede de origen, IP resuelta, estado HTTP y el micro-cronometraje de las 5 fases.',
+        benchmarks: [
+            { label: 'Detalle Modal', range: 'Por Registro', type: 'good', desc: 'Haz clic en el botón "Detalle" de cualquier fila para inspección completa.' },
+            { label: 'Filtro de Estados', range: 'Éxitos / Errores', type: 'good', desc: 'Filtra rápidamente solo las peticiones que presentaron error de red.' }
+        ],
+        troubleshooting: 'Usa la columna "IP Resuelta" para comprobar si la sede está resolviendo hacia el mismo balanceador o hacia un nodo de CDN diferente.',
+        recommendation: 'Puedes exportar toda la tabla filtrada a formato CSV para entregar evidencia formal a proveedores o auditorías de TI.',
+        guideTab: 'tab-troubleshoot'
+    }
+};
+
+// Open Component Quick Help Modal
+function showComponentHelp(topicKey) {
+    const topic = HELP_TOPICS[topicKey];
+    if (!topic) return;
+
+    document.getElementById('compHelpTitle').textContent = topic.title;
+    document.getElementById('compHelpSubtitle').textContent = topic.subtitle;
+    
+    const badgeEl = document.getElementById('compHelpBadge');
+    badgeEl.className = `help-icon-badge ${topic.badgeClass}`;
+    badgeEl.innerHTML = `<i data-lucide="${topic.icon}"></i>`;
+
+    let benchmarksHtml = '';
+    if (topic.benchmarks && topic.benchmarks.length > 0) {
+        benchmarksHtml = `
+            <div style="margin-top:0.6rem;">
+                <strong style="font-size:0.82rem; color:#fff;">Valores de Referencia (Benchmarks):</strong>
+                <div class="help-benchmark-grid">
+                    ${topic.benchmarks.map(b => `
+                        <div class="benchmark-card benchmark-${b.type}">
+                            <strong>${b.label}: ${b.range}</strong>
+                            <span>${b.desc}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    const bodyEl = document.getElementById('compHelpBody');
+    bodyEl.innerHTML = `
+        <div class="help-box">
+            <div class="help-box-title"><i data-lucide="info"></i> ¿Qué mide y cómo opera?</div>
+            <p>${topic.description}</p>
+            ${topic.layer ? `<div style="margin-top:0.4rem; font-size:0.78rem; color:var(--text-secondary);"><strong>Capa de Red:</strong> ${topic.layer}</div>` : ''}
+            ${topic.mechanism ? `<div class="flow-step-code" style="margin-top:0.35rem;">${topic.mechanism}</div>` : ''}
+        </div>
+
+        ${benchmarksHtml}
+
+        <div class="help-box" style="border-left: 3px solid var(--accent-amber);">
+            <div class="help-box-title" style="color:var(--accent-amber);"><i data-lucide="alert-triangle"></i> Diagnóstico de Causa Raíz</div>
+            <p>${topic.troubleshooting}</p>
+        </div>
+
+        <div class="help-callout">
+            <strong>Recomendación Técnica:</strong> ${topic.recommendation}
+        </div>
+    `;
+
+    // Configure "Ver en Guía Completa" button
+    const btnGoToGuide = document.getElementById('btnCompGoToGuide');
+    btnGoToGuide.onclick = () => {
+        closeModal('componentHelpModal');
+        openModal('helpModal');
+        if (topic.guideTab) {
+            switchHelpTab(topic.guideTab);
+        }
+    };
+
+    openModal('componentHelpModal');
+    initLucideIcons();
+}
+
+// Switch Active Tab in General Help Modal
+function switchHelpTab(tabId) {
+    document.querySelectorAll('.help-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+    });
+
+    document.querySelectorAll('.help-tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === tabId);
+    });
+}
+
+// Initialize Help System Event Listeners
+function initHelpSystem() {
+    // Component Help Buttons
+    document.querySelectorAll('.component-help-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const topic = btn.getAttribute('data-topic');
+            if (topic) showComponentHelp(topic);
+        });
+    });
+
+    // General Help Modal Trigger
+    const btnOpenHelp = document.getElementById('btnOpenHelp');
+    if (btnOpenHelp) {
+        btnOpenHelp.addEventListener('click', () => {
+            openModal('helpModal');
+            initLucideIcons();
+        });
+    }
+
+    const btnCloseHelp = document.getElementById('btnCloseHelp');
+    if (btnCloseHelp) btnCloseHelp.addEventListener('click', () => closeModal('helpModal'));
+
+    const btnCloseHelpFooter = document.getElementById('btnCloseHelpFooter');
+    if (btnCloseHelpFooter) btnCloseHelpFooter.addEventListener('click', () => closeModal('helpModal'));
+
+    const btnCloseCompHelp = document.getElementById('btnCloseComponentHelp');
+    if (btnCloseCompHelp) btnCloseCompHelp.addEventListener('click', () => closeModal('componentHelpModal'));
+
+    const btnCompClose = document.getElementById('btnCompClose');
+    if (btnCompClose) btnCompClose.addEventListener('click', () => closeModal('componentHelpModal'));
+
+    // Help Tabs Navigation
+    document.querySelectorAll('.help-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabId = btn.getAttribute('data-tab');
+            switchHelpTab(tabId);
+            initLucideIcons();
+        });
+    });
 }

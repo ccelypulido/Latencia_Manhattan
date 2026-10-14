@@ -738,3 +738,322 @@ input:checked + .slider:before { transform: translateX(20px); }
         align-items: flex-start;
     }
 }
+
+/* ==========================================================================
+   Interactive In-App Help & Technical Guide System Styles
+   ========================================================================== */
+
+.card-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.component-help-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-secondary);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+}
+
+.component-help-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.component-help-btn:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    transform: scale(1.15);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+.header-help-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Modal Sizes */
+.modal-card-md {
+    max-width: 620px;
+    width: 92%;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.modal-card-lg {
+    max-width: 960px;
+    width: 95%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.help-title-container {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.help-icon-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    flex-shrink: 0;
+}
+
+/* Help Tabs */
+.help-tabs {
+    display: flex;
+    gap: 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.6rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.help-tab-btn {
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.help-tab-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.help-tab-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+
+.help-tab-btn.active {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: rgba(56, 189, 248, 0.35);
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+
+.help-tab-content {
+    display: none;
+}
+
+.help-tab-content.active {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    animation: helpFadeIn 0.25s ease-out;
+}
+
+@keyframes helpFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Informative Blocks */
+.help-box {
+    background: rgba(30, 41, 59, 0.45);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+}
+
+.help-box-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.help-box p {
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+
+/* Benchmarks Grid */
+.help-benchmark-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin: 0.5rem 0;
+}
+
+.benchmark-card {
+    padding: 0.75rem;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.benchmark-card strong {
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.benchmark-card span {
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+}
+
+.benchmark-good {
+    background: rgba(52, 211, 153, 0.1);
+    border-color: rgba(52, 211, 153, 0.25);
+    color: var(--accent-emerald);
+}
+
+.benchmark-warn {
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.25);
+    color: var(--accent-amber);
+}
+
+.benchmark-crit {
+    background: rgba(244, 63, 94, 0.1);
+    border-color: rgba(244, 63, 94, 0.25);
+    color: var(--accent-rose);
+}
+
+/* Diagnostic / Troubleshooting Table inside Modal */
+.help-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-top: 0.5rem;
+}
+
+.help-table th, .help-table td {
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+}
+
+.help-table th {
+    background: rgba(15, 23, 42, 0.6);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.help-table td {
+    color: var(--text-primary);
+}
+
+/* Sequence Diagram Cards in Modal */
+.flow-steps-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.flow-step-card {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.flow-step-card:hover {
+    border-color: var(--border-glow);
+    transform: translateX(3px);
+}
+
+.flow-step-num {
+    background: linear-gradient(135deg, #0284c7, #9333ea);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.flow-step-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+}
+
+.flow-step-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.flow-step-header strong {
+    font-size: 0.88rem;
+    color: #fff;
+}
+
+.flow-step-content p {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.flow-step-code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    color: var(--accent-blue);
+    align-self: flex-start;
+    margin-top: 0.25rem;
+}
+
+/* Callout Box */
+.help-callout {
+    background: rgba(56, 189, 248, 0.08);
+    border-left: 4px solid var(--accent-blue);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1rem;
+    font-size: 0.84rem;
+    color: var(--text-primary);
+}
+
+.help-callout strong {
+    color: var(--accent-blue);
+}

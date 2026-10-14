@@ -48,6 +48,9 @@
                 <button id="btnProbeNow" class="btn btn-primary" title="Ejecutar prueba de latencia inmediata">
                     <i data-lucide="zap"></i> Probar Ahora
                 </button>
+                <button id="btnOpenHelp" class="btn btn-secondary" title="Sustento Técnico y Guía de Diagnóstico de Red">
+                    <i data-lucide="book-open"></i> Guía & Ayuda
+                </button>
                 <button id="btnOpenConfig" class="btn btn-secondary" title="Configurar parámetros y Sede">
                     <i data-lucide="settings"></i> Configuración
                 </button>
@@ -65,6 +68,9 @@
                 <div class="toolbar-content">
                     <div class="toolbar-group">
                         <label for="filterLocationSelect"><i data-lucide="map-pin"></i> Filtrar por Sede / Ubicación:</label>
+                        <button class="component-help-btn" data-topic="locations" title="Ayuda sobre aislamiento y filtro por Sedes">
+                            <i data-lucide="help-circle"></i>
+                        </button>
                         <select id="filterLocationSelect" class="form-select font-bold">
                             <option value="all">Todas las Sedes</option>
                         </select>
@@ -81,7 +87,12 @@
                 <div class="metric-card primary-accent">
                     <div class="card-header">
                         <span class="card-title"><i data-lucide="clock"></i> Latencia Total Promedio</span>
-                        <span class="badge badge-blue">Global</span>
+                        <div class="card-header-actions">
+                            <span class="badge badge-blue">Global</span>
+                            <button class="component-help-btn" data-topic="total" title="Ayuda técnica: Latencia Total">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-value-container">
                         <span class="metric-number" id="valAvgTotal">--</span>
@@ -98,7 +109,12 @@
                 <div class="metric-card cyan-accent">
                     <div class="card-header">
                         <span class="card-title"><i data-lucide="server"></i> Resolución DNS</span>
-                        <span class="badge badge-cyan">Fase 1</span>
+                        <div class="card-header-actions">
+                            <span class="badge badge-cyan">Fase 1</span>
+                            <button class="component-help-btn" data-topic="dns" title="Ayuda técnica: Resolución DNS">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-value-container">
                         <span class="metric-number" id="valAvgDNS">--</span>
@@ -115,7 +131,12 @@
                 <div class="metric-card purple-accent">
                     <div class="card-header">
                         <span class="card-title"><i data-lucide="network"></i> Conexión TCP</span>
-                        <span class="badge badge-purple">Fase 2</span>
+                        <div class="card-header-actions">
+                            <span class="badge badge-purple">Fase 2</span>
+                            <button class="component-help-btn" data-topic="tcp" title="Ayuda técnica: Conexión TCP">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-value-container">
                         <span class="metric-number" id="valAvgTCP">--</span>
@@ -132,7 +153,12 @@
                 <div class="metric-card amber-accent">
                     <div class="card-header">
                         <span class="card-title"><i data-lucide="lock"></i> Negotiation TLS / SSL</span>
-                        <span class="badge badge-amber">Fase 3</span>
+                        <div class="card-header-actions">
+                            <span class="badge badge-amber">Fase 3</span>
+                            <button class="component-help-btn" data-topic="tls" title="Ayuda técnica: Negociación TLS / SSL">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-value-container">
                         <span class="metric-number" id="valAvgTLS">--</span>
@@ -149,7 +175,12 @@
                 <div class="metric-card emerald-accent">
                     <div class="card-header">
                         <span class="card-title"><i data-lucide="cpu"></i> Espera Servidor (TTFB)</span>
-                        <span class="badge badge-emerald">Fase 4</span>
+                        <div class="card-header-actions">
+                            <span class="badge badge-emerald">Fase 4</span>
+                            <button class="component-help-btn" data-topic="ttfb" title="Ayuda técnica: Espera Servidor TTFB">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-value-container">
                         <span class="metric-number" id="valAvgTTFB">--</span>
@@ -166,7 +197,12 @@
                 <div class="metric-card rose-accent">
                     <div class="card-header">
                         <span class="card-title"><i data-lucide="bar-chart-3"></i> Valores Pico & Uptime</span>
-                        <span class="badge badge-rose">Estadística</span>
+                        <div class="card-header-actions">
+                            <span class="badge badge-rose">Estadística</span>
+                            <button class="component-help-btn" data-topic="stats" title="Ayuda técnica: Percentiles y Jitter">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="stat-rows">
                         <div class="stat-row">
@@ -192,7 +228,12 @@
             <!-- Cross Location Comparison Panel -->
             <section class="panel-card glow-card" id="locationComparisonSection">
                 <div class="panel-header">
-                    <h2><i data-lucide="git-compare"></i> Comparativa de Latencias entre Sedes</h2>
+                    <div class="header-help-group">
+                        <h2><i data-lucide="git-compare"></i> Comparativa de Latencias entre Sedes</h2>
+                        <button class="component-help-btn" data-topic="comparison" title="Ayuda técnica: Comparativa entre Sedes">
+                            <i data-lucide="help-circle"></i>
+                        </button>
+                    </div>
                     <p class="chart-subtitle">Resumen promedio de rendimiento por ubicación registrada</p>
                 </div>
                 <div class="table-wrapper">
@@ -224,7 +265,12 @@
                 <div class="chart-container-card glow-card">
                     <div class="chart-header">
                         <div>
-                            <h2>Desglose Temporal por Componente (DNS + TCP + TLS + TTFB)</h2>
+                            <div class="header-help-group">
+                                <h2>Desglose Temporal por Componente (DNS + TCP + TLS + TTFB)</h2>
+                                <button class="component-help-btn" data-topic="chart-breakdown" title="Ayuda técnica: Desglose Apilado">
+                                    <i data-lucide="help-circle"></i>
+                                </button>
+                            </div>
                             <p class="chart-subtitle">Permite identificar exactamente qué fase ocasiona latencias o retrasos</p>
                         </div>
                         <div class="chart-legend-pills">
@@ -243,7 +289,12 @@
                 <div class="chart-container-card glow-card">
                     <div class="chart-header">
                         <div>
-                            <h2>Histórico de Latencia Total y Detección de Picos</h2>
+                            <div class="header-help-group">
+                                <h2>Histórico de Latencia Total y Detección de Picos</h2>
+                                <button class="component-help-btn" data-topic="chart-timeline" title="Ayuda técnica: Línea de Tiempo y Picos">
+                                    <i data-lucide="help-circle"></i>
+                                </button>
+                            </div>
                             <p class="chart-subtitle">Línea de tiempo continua con límites de tiempo promedio y máximos</p>
                         </div>
                     </div>
@@ -257,7 +308,12 @@
             <section class="secondary-grid">
                 <div class="chart-container-card flex-1">
                     <div class="chart-header">
-                        <h2>Comparativa Promedio por Fase de Conexión (ms)</h2>
+                        <div class="header-help-group">
+                            <h2>Comparativa Promedio por Fase de Conexión (ms)</h2>
+                            <button class="component-help-btn" data-topic="chart-phases" title="Ayuda técnica: Comparativa de Fases">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="chart-wrapper-sm">
                         <canvas id="chartPhaseBar"></canvas>
@@ -266,7 +322,12 @@
 
                 <div class="panel-card flex-1">
                     <div class="panel-header">
-                        <h2><i data-lucide="pie-chart"></i> Resumen de Respuestas HTTP</h2>
+                        <div class="header-help-group">
+                            <h2><i data-lucide="pie-chart"></i> Resumen de Respuestas HTTP</h2>
+                            <button class="component-help-btn" data-topic="http-status" title="Ayuda técnica: Códigos de Respuesta HTTP">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="status-summary-content" id="statusCodesContainer">
                         <div class="empty-state">No hay datos disponibles</div>
@@ -278,7 +339,12 @@
             <section class="history-section glow-card">
                 <div class="table-header-panel">
                     <div class="table-title">
-                        <h2><i data-lucide="database"></i> Histórico de Mediciones de Latencia</h2>
+                        <div class="header-help-group">
+                            <h2><i data-lucide="database"></i> Histórico de Mediciones de Latencia</h2>
+                            <button class="component-help-btn" data-topic="history-table" title="Ayuda técnica: Auditoría de Histórico">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
                         <span class="record-counter" id="recordCounter">0 registros</span>
                     </div>
 
@@ -421,6 +487,348 @@
             </div>
             <div class="modal-body" id="detailModalBody">
                 <!-- Content injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- ==========================================================================
+         Component Contextual Help Modal (Quick Diagnostic)
+         ========================================================================== -->
+    <div class="modal-overlay" id="componentHelpModal">
+        <div class="modal-card modal-card-md">
+            <div class="modal-header">
+                <div class="help-title-container">
+                    <div class="help-icon-badge" id="compHelpBadge">
+                        <i data-lucide="info" id="compHelpIcon"></i>
+                    </div>
+                    <div>
+                        <h2 id="compHelpTitle">Explicación del Componente</h2>
+                        <span class="sub-title" id="compHelpSubtitle">Sustento técnico y diagnóstico</span>
+                    </div>
+                </div>
+                <button class="modal-close" id="btnCloseComponentHelp">&times;</button>
+            </div>
+            <div class="modal-body" id="compHelpBody">
+                <!-- Content dynamically injected by app.js -->
+            </div>
+            <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+                <button id="btnCompGoToGuide" class="btn btn-outline btn-sm">
+                    <i data-lucide="external-link"></i> Abrir Guía Completa
+                </button>
+                <button id="btnCompClose" class="btn btn-secondary btn-sm">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         General Technical Guide & Network Diagnostics Modal
+         ========================================================================== -->
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal-card modal-card-lg">
+            <div class="modal-header">
+                <div>
+                    <h2><i data-lucide="book-open"></i> Sustento Técnico y Guía de Diagnóstico de Red</h2>
+                    <p class="chart-subtitle">Fundamentos teóricos, metodología por capas TCP/IP y resolución de cuellos de botella</p>
+                </div>
+                <button class="modal-close" id="btnCloseHelp">&times;</button>
+            </div>
+
+            <!-- Tab Navigation Bar -->
+            <div class="help-tabs">
+                <button class="help-tab-btn active" data-tab="tab-flow">
+                    <i data-lucide="git-commit"></i> 1. Fases de Conexión
+                </button>
+                <button class="help-tab-btn" data-tab="tab-methodology">
+                    <i data-lucide="binary"></i> 2. Fórmulas & Sockets
+                </button>
+                <button class="help-tab-btn" data-tab="tab-devtools">
+                    <i data-lucide="gauge"></i> 3. vs Chrome DevTools / cURL
+                </button>
+                <button class="help-tab-btn" data-tab="tab-troubleshoot">
+                    <i data-lucide="alert-triangle"></i> 4. Matriz de Causa Raíz
+                </button>
+                <button class="help-tab-btn" data-tab="tab-locations">
+                    <i data-lucide="map-pin"></i> 5. Gestión por Sedes
+                </button>
+                <button class="help-tab-btn" data-tab="tab-auth">
+                    <i data-lucide="shield-check"></i> 6. Autenticación & MFA
+                </button>
+                <button class="help-tab-btn" data-tab="tab-stats">
+                    <i data-lucide="bar-chart-2"></i> 7. Percentiles & Jitter
+                </button>
+            </div>
+
+            <!-- Scrollable Tab Content Body -->
+            <div class="modal-body" style="max-height: 60vh; overflow-y: auto; padding-right: 0.5rem;">
+                
+                <!-- Tab 1: Fases de Conexión -->
+                <div class="help-tab-content active" id="tab-flow">
+                    <div class="help-callout">
+                        <strong>Arquitectura de Conexión Secuencial:</strong> Las peticiones HTTPS no son atómicas; se dividen en 5 etapas rigurosamente secuenciales a través de las capas OSI y TCP/IP.
+                    </div>
+
+                    <div class="flow-steps-grid">
+                        <div class="flow-step-card">
+                            <div class="flow-step-num">1</div>
+                            <div class="flow-step-content">
+                                <div class="flow-step-header">
+                                    <strong>Fase 1: Resolución DNS (dns_ms)</strong>
+                                    <span class="badge badge-cyan">Capa de Aplicación (UDP/53)</span>
+                                </div>
+                                <p>El cliente consulta a los servidores DNS configurados en el sistema operativo para traducir el nombre de dominio (ej. <code>alkop.sce.manh.com</code>) en una dirección IP destino (<code>136.68.87.180</code>).</p>
+                                <span class="flow-step-code">socket.gethostbyname(hostname)</span>
+                            </div>
+                        </div>
+
+                        <div class="flow-step-card">
+                            <div class="flow-step-num">2</div>
+                            <div class="flow-step-content">
+                                <div class="flow-step-header">
+                                    <strong>Fase 2: Handshake TCP (tcp_ms)</strong>
+                                    <span class="badge badge-purple">Capa de Transporte (TCP)</span>
+                                </div>
+                                <p>Se establece el socket confiable mediante el 3-Way Handshake (<code>SYN</code> → <code>SYN-ACK</code> → <code>ACK</code>). Mide el tiempo puro de ida y vuelta de red (<strong>1 RTT</strong>) hacia el servidor o balanceador de Manhattan.</p>
+                                <span class="flow-step-code">sock.connect((ip, port))</span>
+                            </div>
+                        </div>
+
+                        <div class="flow-step-card">
+                            <div class="flow-step-num">3</div>
+                            <div class="flow-step-content">
+                                <div class="flow-step-header">
+                                    <strong>Fase 3: Negociación Criptográfica TLS / SSL (tls_ms)</strong>
+                                    <span class="badge badge-amber">Capa de Seguridad / Presentación</span>
+                                </div>
+                                <p>Sobre el socket TCP ya abierto, se negocia el canal cifrado: intercambio de llaves Diffie-Hellman/ECDHE, validación de la cadena de certificados x509 del servidor y establecimiento del cifrado simétrico (1 a 2 RTTs + cálculo criptográfico de CPU).</p>
+                                <span class="flow-step-code">ssl_context.wrap_socket(sock, hostname)</span>
+                            </div>
+                        </div>
+
+                        <div class="flow-step-card">
+                            <div class="flow-step-num">4</div>
+                            <div class="flow-step-content">
+                                <div class="flow-step-header">
+                                    <strong>Fase 4: Espera del Servidor (TTFB - Time To First Byte)</strong>
+                                    <span class="badge badge-emerald">Capa de Aplicación (HTTP/1.1)</span>
+                                </div>
+                                <p>Tiempo que transcurre desde que se envía la solicitud HTTP (con sus cabeceras, cookies o autenticación) hasta recibir el primer byte de respuesta del servidor Manhattan. Evalúa el procesamiento en backend.</p>
+                                <span class="flow-step-code">sock.sendall() → sock.recv(1)</span>
+                            </div>
+                        </div>
+
+                        <div class="flow-step-card">
+                            <div class="flow-step-num">5</div>
+                            <div class="flow-step-content">
+                                <div class="flow-step-header">
+                                    <strong>Fase 5: Transferencia de Datos (transfer_ms)</strong>
+                                    <span class="badge badge-blue">Capa de Transporte / Datos</span>
+                                </div>
+                                <p>Descarga completa del cuerpo de la respuesta HTTP a través de chunks en el socket hasta el cierre de la conexión o fin del Content-Length.</p>
+                                <span class="flow-step-code">while sock.recv(8192)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Metodología & Fórmulas -->
+                <div class="help-tab-content" id="tab-methodology">
+                    <div class="help-box">
+                        <div class="help-box-title"><i data-lucide="calculator"></i> Ecuación de Latencia Acumulada</div>
+                        <p>Cada medición en este analizador se calcula mediante temporizadores monótonos de altísima resolución (<code>time.perf_counter()</code>) que no se ven afectados por ajustes en el reloj del sistema:</p>
+                        <div style="font-family: var(--font-mono); font-size: 1rem; color: var(--accent-blue); background: rgba(0,0,0,0.3); padding: 0.85rem; border-radius: 8px; margin: 0.5rem 0; text-align: center;">
+                            T_Total = T_DNS + T_TCP + T_TLS + T_TTFB + T_Transfer
+                        </div>
+                        <p>A diferencia de librerías de alto nivel que mezclan tiempos, el motor <code>probe.py</code> cronometra cada llamada al socket de forma aislada para garantizar que <strong>no exista duplicidad ni superposición</strong> en los milisegundos reportados.</p>
+                    </div>
+
+                    <div class="help-box">
+                        <div class="help-box-title"><i data-lucide="shield-check"></i> Cero Dependencias Externas</div>
+                        <p>El analizador está construido exclusivamente sobre la librería estándar de Python (<code>socket</code>, <code>ssl</code>, <code>sqlite3</code>, <code>http.server</code>). Esto garantiza que pueda desplegarse inmediatamente en cualquier terminal Windows, Linux o máquina corporativa restringida sin requerir <code>pip install</code> ni privilegios de administrador.</p>
+                    </div>
+                </div>
+
+                <!-- Tab 3: DevTools / cURL -->
+                <div class="help-tab-content" id="tab-devtools">
+                    <div class="help-callout">
+                        <strong>¿Por qué en Chrome DevTools "Initial Connection" incluye a SSL?</strong><br>
+                        En la especificación W3C Resource Timing, la barra <em>"Initial Connection"</em> abarca el tiempo total desde que arranca la conexión hasta que está lista para HTTP (<code>connectEnd - connectStart</code>). Por tanto, en Chrome <strong>Initial Connection es la suma de TCP + SSL</strong>, siendo SSL una sub-barra interna.
+                    </div>
+
+                    <div class="table-wrapper" style="margin-top: 0.5rem;">
+                        <table class="help-table">
+                            <thead>
+                                <tr>
+                                    <th>Fase</th>
+                                    <th>Manhattan Latency Analyzer</th>
+                                    <th>Chrome DevTools (W3C)</th>
+                                    <th>cURL (curl -w)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>DNS</strong></td>
+                                    <td><code>dns_ms</code></td>
+                                    <td><code>DNS Lookup</code></td>
+                                    <td><code>time_namelookup</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>TCP</strong></td>
+                                    <td><code>tcp_ms</code> (Aislado)</td>
+                                    <td>Parte de <code>Initial Connection</code></td>
+                                    <td><code>time_connect - time_namelookup</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>TLS / SSL</strong></td>
+                                    <td><code>tls_ms</code> (Aislado)</td>
+                                    <td><code>SSL</code> (Sub-barra interna)</td>
+                                    <td><code>time_appconnect - time_connect</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>TCP + TLS</strong></td>
+                                    <td>Suma analítica (TCP + TLS)</td>
+                                    <td><strong><code>Initial Connection</code></strong></td>
+                                    <td><code>time_appconnect - time_namelookup</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Espera Servidor</strong></td>
+                                    <td><code>ttfb_ms</code></td>
+                                    <td><code>Waiting for server response</code></td>
+                                    <td><code>time_starttransfer - time_appconnect</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Transferencia</strong></td>
+                                    <td><code>transfer_ms</code></td>
+                                    <td><code>Content Download</code></td>
+                                    <td><code>time_total - time_starttransfer</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="help-box" style="margin-top: 0.75rem;">
+                        <div class="help-box-title"><i data-lucide="check-circle-2"></i> Ventaja de la Medición Desacoplada</div>
+                        <p>Al reportar TCP y TLS en dos tarjetas separadas, podemos determinar si un incremento en la latencia es atribuible a <strong>la red/ISP</strong> (TCP alto) o a <strong>la sobrecarga de CPU en el servidor web</strong> (TLS alto).</p>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Troubleshooting -->
+                <div class="help-tab-content" id="tab-troubleshoot">
+                    <p class="text-muted" style="font-size:0.84rem;">Utiliza esta matriz de diagnóstico rápido para correlacionar picos en las métricas con su causa raíz más probable en la infraestructura:</p>
+
+                    <div class="table-wrapper">
+                        <table class="help-table">
+                            <thead>
+                                <tr>
+                                    <th>Síntoma</th>
+                                    <th>Métrica Elevada</th>
+                                    <th>Causa Raíz Probable</th>
+                                    <th>Acción Recomendada</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong class="text-danger">DNS Lento</strong></td>
+                                    <td><code>dns_ms &gt; 50 ms</code></td>
+                                    <td>Servidor DNS local o corporativo sobrecargado, pérdida de caché o resolver recursivo distante.</td>
+                                    <td>Verificar servidores DNS primario/secundario en la sede; evaluar servidores DNS locales más rápidos.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong class="text-danger">Red / ISP Lento</strong></td>
+                                    <td><code>tcp_ms &gt; 100 ms</code></td>
+                                    <td>Problema físico de canal, latencia RTT geográfica, congestión en el proveedor de internet o enlace WAN saturado.</td>
+                                    <td>Ejecutar traceroute / MTR hacia <code>136.68.87.180</code>; revisar canal SD-WAN y consumo de ancho de banda.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong class="text-danger">SSL Sobrecargado</strong></td>
+                                    <td><code>tls_ms &gt; 150 ms</code></td>
+                                    <td>Sobrecarga de CPU en el balanceador o terminador SSL de Manhattan; validación CRL/OCSP lenta.</td>
+                                    <td>Verificar si el endpoint soporta TLS 1.3 (1-RTT); auditar la carga en el reverse proxy de Manhattan.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong class="text-danger">Backend Lento</strong></td>
+                                    <td><code>ttfb_ms &gt; 400 ms</code></td>
+                                    <td>Cola de peticiones en el servidor de Manhattan, base de datos ocupada o demora en el middleware de autenticación SSO.</td>
+                                    <td>Revisar métricas internas de la aplicación Manhattan; verificar salud del servicio de ping.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong class="text-danger">Descarga Lenta</strong></td>
+                                    <td><code>transfer_ms &gt; 20 ms</code></td>
+                                    <td>Pérdida de paquetes, ventana TCP pequeña o saturación del ancho de banda local.</td>
+                                    <td>Verificar calidad del enlace Wi-Fi/cableado y pérdida de paquetes en la red local.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab 5: Sedes -->
+                <div class="help-tab-content" id="tab-locations">
+                    <div class="help-box">
+                        <div class="help-box-title"><i data-lucide="map-pin"></i> Sistema de Etiquetado por Sedes (Location Tagging)</div>
+                        <p>Cuando se realizan pruebas en diferentes días o desde diferentes sucursales (ej. Sede Bogotá, Sede Medellín, Home Office), el sistema etiqueta cada muestra de latencia en la base de datos SQLite:</p>
+                        <ul style="font-size:0.84rem; color:var(--text-secondary); margin-left:1.25rem; line-height:1.6; margin-top:0.4rem;">
+                            <li><strong>Etiqueta de Sede:</strong> Configurable desde el menú <em>⚙️ Configuración</em>. Todas las pruebas realizadas desde ese equipo quedarán marcadas con esa sede.</li>
+                            <li><strong>Filtro Global:</strong> El selector de la barra superior actualiza de forma reactiva todas las tarjetas, gráficos y promedios para la sede elegida (o "Todas las Sedes").</li>
+                            <li><strong>Panel Comparativo entre Sedes:</strong> Contrasta en tiempo real el rendimiento relativo de cada oficina (Muestras, DNS, TCP, TLS, TTFB y Latencia Total).</li>
+                            <li><strong>Limpieza Contextual:</strong> Al pulsar <em>Limpiar Histórico</em>, el sistema detecta si estás filtrando una sede específica para borrar únicamente los registros de dicha sede sin tocar las demás.</li>
+                            <li><strong>Exportación a CSV:</strong> El botón <em>Exportar</em> descarga únicamente los datos de la sede seleccionada para generar informes independientes.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Tab 6: Autenticación -->
+                <div class="help-tab-content" id="tab-auth">
+                    <div class="help-box">
+                        <div class="help-box-title"><i data-lucide="shield-check"></i> Impacto de la Autenticación en la Medición de Latencia</div>
+                        <p>El endpoint de ping de Manhattan puede requerir autenticación para responder con <code>HTTP 200 OK</code>. Este analizador soporta 3 modalidades:</p>
+                        
+                        <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:0.6rem;">
+                            <div style="background:rgba(0,0,0,0.25); padding:0.75rem; border-radius:8px; border-left:3px solid var(--accent-rose);">
+                                <strong style="color:var(--accent-rose); font-size:0.85rem;">1. Petición Anónima (Sin Autenticación):</strong>
+                                <p style="margin-top:0.2rem; font-size:0.8rem;">Devuelve <code>HTTP 401</code> o <code>403 Forbidden</code>. El servidor rechaza la petición rápidamente, por lo que el TTFB puede verse artificialmente menor ya que no ejecuta la lógica de negocio.</p>
+                            </div>
+
+                            <div style="background:rgba(0,0,0,0.25); padding:0.75rem; border-radius:8px; border-left:3px solid var(--accent-purple);">
+                                <strong style="color:var(--accent-purple); font-size:0.85rem;">2. Autenticación NTLM v2 (Dominio Active Directory):</strong>
+                                <p style="margin-top:0.2rem; font-size:0.8rem;">Ejecuta el protocolo de desafío/respuesta de 3 vías (Type 1 Negotiate → Type 2 Challenge → Type 3 Authenticate) en Python puro sin dependencias externas sobre el mismo socket seguro.</p>
+                            </div>
+
+                            <div style="background:rgba(0,0,0,0.25); padding:0.75rem; border-radius:8px; border-left:3px solid var(--accent-emerald);">
+                                <strong style="color:var(--accent-emerald); font-size:0.85rem;">3. Cookie de Sesión / Bearer (MFA Microsoft / Azure AD SSO):</strong>
+                                <p style="margin-top:0.2rem; font-size:0.8rem;">Permite simular exactamente a un usuario logueado tras validar el doble factor (MFA). Al extraer la cookie desde el navegador (F12 → Red → Cookie: FedAuth=...; JSESSIONID=...), el analizador la inyecta entregando <code>HTTP 200 OK</code> y midiendo la latencia operativa real.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 7: Percentiles & Jitter -->
+                <div class="help-tab-content" id="tab-stats">
+                    <div class="help-box">
+                        <div class="help-box-title"><i data-lucide="bar-chart-2"></i> ¿Por qué los Promedios no son Suficientes?</div>
+                        <p>En operaciones logísticas y sistemas WMS de misión crítica, un promedio puede dar una falsa sensación de normalidad. Si 99 peticiones tardan 200 ms y 1 petición tarda 5000 ms (un congelamiento en la terminal de radiofrecuencia), el promedio dirá "248 ms (aparentemente bien)", pero el operador sufrió una detención crítica.</p>
+                        
+                        <div class="help-benchmark-grid" style="margin-top: 0.75rem;">
+                            <div class="benchmark-card benchmark-good">
+                                <strong>Percentil P95</strong>
+                                <span>El 95% de las peticiones fueron más rápidas que este valor. Estándar de SLA en Manhattan SCE.</span>
+                            </div>
+                            <div class="benchmark-card benchmark-warn">
+                                <strong>Percentil P99</strong>
+                                <span>Refleja el peor 1% de las transacciones (los peores micro-picos o retrasos que perciben los usuarios).</span>
+                            </div>
+                            <div class="benchmark-card benchmark-crit">
+                                <strong>Jitter (StdDev)</strong>
+                                <span>Desviación estándar de latencia. Evalúa la estabilidad del canal. Un Jitter &lt; 15 ms indica una red sumamente estable.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <div class="modal-footer" style="display:flex; justify-content:flex-end;">
+                <button id="btnCloseHelpFooter" class="btn btn-primary btn-sm">Cerrar Guía</button>
             </div>
         </div>
     </div>
