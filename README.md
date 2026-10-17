@@ -23,9 +23,10 @@ Para evitar que los resultados se confundan al realizar pruebas en **diferentes 
 | **1. Resolución DNS** | `dns_ms` | Tiempo transcurrido para resolver el nombre de dominio a su dirección IP (`136.68.87.180`). |
 | **2. Conexión TCP** | `tcp_ms` | Tiempo que toma establecer el Handshake TCP de la capa de transporte (Socket connect). |
 | **3. Negociación TLS / SSL** | `tls_ms` | Tiempo dedicado a la negociación del canal cifrado SSL/TLS (peticiones HTTPS). |
-| **4. Espera del Servidor (TTFB)** | `ttfb_ms` | **Time To First Byte**: Tiempo desde que se envía la solicitud HTTP hasta recibir el primer byte de respuesta del servidor. |
-| **5. Transferencia de Datos** | `transfer_ms` | Tiempo de lectura del cuerpo completo de la respuesta del servidor. |
-| **6. Latencia Total** | `total_ms` | Tiempo acumulado end-to-end (`DNS + TCP + TLS + TTFB + Transfer`). |
+| **4. Espera del Servidor (TTFB)** | `ttfb_ms` | **Time To First Byte**: Tiempo desde que se envía la solicitud HTTP hasta recibir el primer byte de respuesta del servidor (*Waiting for server response*). |
+| **5. Transferencia de Datos** | `transfer_ms` | Tiempo de lectura del cuerpo completo de la respuesta del servidor (*Content Download*). |
+| **6. Latencia Navegador / PDA** | `total_ms` | **Latencia operativa HTTP** (`TTFB + Transfer`), correspondiente a la metodología que mide Chrome DevTools y las terminales PDA con conexiones persistentes (*Keep-Alive*). |
+| **7. Conexión en Frío (Cold Start)** | `cold_total_ms` | Tiempo acumulado de conexión desde cero (`DNS + TCP + TLS + TTFB + Transfer`), medido al abrir un nuevo socket de red. |
 
 ---
 
@@ -73,7 +74,15 @@ sequenceDiagram
 
 Todas las mediciones se realizan mediante temporizadores de alta resolución (`time.perf_counter()`), garantizando precisión de fracciones de milisegundo sin dependencias externas:
 
-$$\mathbf{T_{\text{Total}}} = T_{\text{DNS}} + T_{\text{TCP}} + T_{\text{TLS}} + T_{\text{TTFB}} + T_{\text{Transfer}}$$
+$$\mathbf{T_{\text{Navegador / PDA}}} = T_{\text{TTFB}} + T_{\text{Transfer}}$$
+
+$$\mathbf{T_{\text{Cold Start (Conexión Inicial + HTTP)}}} = T_{\text{DNS}} + T_{\text{TCP}} + T_{\text{TLS}} + T_{\text{TTFB}} + T_{\text{Transfer}}$$
+
+> [!IMPORTANT]
+> **Metodología de Navegador (Chrome DevTools / W3C Resource Timing) vs Conexión en Frío:**  
+> Las terminales de radiofrecuencia (PDA) y los navegadores web modernos operan mediante conexiones HTTP persistentes (**HTTP Keep-Alive**). Cuando un operario o script en la PDA realiza la prueba a `https://alkop.sce.manh.com/ping`, el socket TCP y el handshake TLS se mantienen activos, por lo que la latencia operativa efectiva que mide y percibe la PDA es la **latencia de respuesta HTTP** ($T_{\text{TTFB}} + T_{\text{Transfer}} \approx 180 - 220\text{ ms}$).  
+> 
+> Si se calculara sumando todas las fases de arranque en frío desde cero ($T_{\text{DNS}} + T_{\text{TCP}} + T_{\text{TLS}} + T_{\text{TTFB}} + T_{\text{Transfer}}$), el valor resultante ascendería a $\approx 380 - 430\text{ ms}$ (debido a los ~75 ms de socket TCP y ~85 ms de handshake TLS), generando una discrepancia aparente con la PDA. Para alinear el sistema con la experiencia real del usuario en bodega, el analizador reporta la latencia de navegador como la métrica principal (`total_ms`), manteniendo el desglose de Conexión Inicial (`tcp_ms + tls_ms`) y resolución DNS (`dns_ms`) para el diagnóstico de red e infraestructura.
 
 1. **Resolución DNS (`dns_ms`)**:
    - **Mecanismo:** `socket.gethostbyname(hostname)`
@@ -97,14 +106,16 @@ $$\mathbf{T_{\text{Total}}} = T_{\text{DNS}} + T_{\text{TCP}} + T_{\text{TLS}} +
 
 Existe una diferencia conceptual importante en cómo las herramientas de la industria agrupan la conexión de red:
 
-| Fase | **Manhattan Latency Analyzer** | **Google Chrome DevTools** *(Resource Timing W3C)* | **cURL** (`curl -w`) |
+| Fase | **Manhattan Latency Analyzer** | **Google Chrome DevTools** *(Resource Timing W3C)* | **Comportamiento en Terminal PDA** |
 | :--- | :--- | :--- | :--- |
-| **DNS** | `dns_ms` | `DNS Lookup` (`domainLookupEnd - domainLookupStart`) | `time_namelookup` |
-| **TCP** | `tcp_ms` *(Medición aislada del socket)* | Incluido dentro de **`Initial Connection`** | `time_connect - time_namelookup` |
-| **TLS** | `tls_ms` *(Medición aislada del cifrado)* | **`SSL`** *(Mostrado como sub-barra dentro de Initial Connection)* | `time_appconnect - time_connect` |
-| **TCP + TLS** | `tcp_ms + tls_ms` *(Suma analítica)* | **`Initial Connection`** (`connectEnd - connectStart`) | `time_appconnect - time_namelookup` |
-| **Espera Servidor** | `ttfb_ms` | `Waiting for server response` | `time_starttransfer - time_appconnect` |
-| **Descarga** | `transfer_ms` | `Content Download` | `time_total - time_starttransfer` |
+| **Latencia Navegador (PDA)** | **`total_ms`** (`TTFB + Transfer`) | **`Waiting for response + Content Download`** (~187 ms) | Tiempo de respuesta efectivo reportado por la PDA |
+| **Espera Servidor (TTFB)** | `ttfb_ms` | `Waiting for server response` | Tiempo interno de procesamiento de Manhattan |
+| **Descarga de Datos** | `transfer_ms` | `Content Download` | Descarga de payload de respuesta |
+| **Conexión Inicial (TCP + TLS)** | `tcp_ms + tls_ms` *(Conexión de red)* | **`Initial Connection`** (`connectEnd - connectStart`) | Negociado 1 sola vez y reutilizado mediante Keep-Alive |
+| **Conexión TCP** | `tcp_ms` *(Medición aislada del socket)* | Incluido dentro de **`Initial Connection`** | Socket 3-Way Handshake hacia el balanceador (1 RTT) |
+| **Negociación TLS / SSL** | `tls_ms` *(Medición aislada del cifrado)* | **`SSL`** *(Mostrado como sub-barra dentro de Initial Connection)* | Negociación criptográfica sobre el socket TCP |
+| **Resolución DNS** | `dns_ms` | `DNS Lookup` (`domainLookupEnd - domainLookupStart`) | Consulta a servidores de nombres configurados |
+| **Arranque en Frío (Cold Start)** | `cold_total_ms` *(Suma total)* | Duración completa en la primera conexión (~386 ms) | Solo ocurre al iniciar sesión o reconectar socket |
 
 > [!NOTE]
 > **¿Por qué medir TCP y TLS por separado?**  

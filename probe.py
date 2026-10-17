@@ -162,7 +162,7 @@ def measure_latency(url: str, timeout: float = 10.0, auth_config: Optional[Dict[
             req_type1 = (
                 f"GET {path} HTTP/1.1\r\n"
                 f"Host: {hostname}\r\n"
-                f"User-Agent: Manhattan-Latency-Analyzer/1.0\r\n"
+                f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Manhattan-Latency-Analyzer/1.0\r\n"
                 f"Accept: */*\r\n"
                 f"Authorization: NTLM {ntlm_type1}\r\n"
                 f"Connection: keep-alive\r\n\r\n"
@@ -187,7 +187,7 @@ def measure_latency(url: str, timeout: float = 10.0, auth_config: Optional[Dict[
                 req_type3 = (
                     f"GET {path} HTTP/1.1\r\n"
                     f"Host: {hostname}\r\n"
-                    f"User-Agent: Manhattan-Latency-Analyzer/1.0\r\n"
+                    f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Manhattan-Latency-Analyzer/1.0\r\n"
                     f"Accept: */*\r\n"
                     f"Authorization: NTLM {type3_b64}\r\n"
                     f"Connection: close\r\n\r\n"
@@ -215,14 +215,17 @@ def measure_latency(url: str, timeout: float = 10.0, auth_config: Optional[Dict[
                 if len(sp) >= 2 and sp[1].isdigit():
                     res['status_code'] = int(sp[1])
 
-                res['total_ms'] = round((time.perf_counter() - t0) * 1000, 2)
+                # Browser / PDA methodology (W3C Resource Timing / Chrome DevTools: TTFB + Transfer)
+                res['total_ms'] = round(res['ttfb_ms'] + res['transfer_ms'], 2)
+                res['connect_ms'] = round(res['tcp_ms'] + res['tls_ms'], 2)
+                res['cold_total_ms'] = round(res['dns_ms'] + res['tcp_ms'] + res['tls_ms'] + res['ttfb_ms'] + res['transfer_ms'], 2)
                 return res
 
         # Fallback / Direct Request (No NTLM or standard headers)
         req_headers = (
             f"GET {path} HTTP/1.1\r\n"
             f"Host: {hostname}\r\n"
-            f"User-Agent: Manhattan-Latency-Analyzer/1.0\r\n"
+            f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Manhattan-Latency-Analyzer/1.0\r\n"
             f"Accept: */*\r\n"
             f"{extra_headers}"
             f"Connection: close\r\n\r\n"
@@ -253,16 +256,23 @@ def measure_latency(url: str, timeout: float = 10.0, auth_config: Optional[Dict[
         if len(parts) >= 2 and parts[1].isdigit():
             res['status_code'] = int(parts[1])
 
-        res['total_ms'] = round((time.perf_counter() - t0) * 1000, 2)
+        # Browser / PDA methodology (W3C Resource Timing / Chrome DevTools: TTFB + Transfer)
+        res['total_ms'] = round(res['ttfb_ms'] + res['transfer_ms'], 2)
+        res['connect_ms'] = round(res['tcp_ms'] + res['tls_ms'], 2)
+        res['cold_total_ms'] = round(res['dns_ms'] + res['tcp_ms'] + res['tls_ms'] + res['ttfb_ms'] + res['transfer_ms'], 2)
 
     except socket.timeout:
         res['is_error'] = True
         res['error_message'] = f"Timeout reached ({timeout}s)"
         res['total_ms'] = round((time.perf_counter() - t0) * 1000, 2)
+        res['connect_ms'] = round(res.get('tcp_ms', 0.0) + res.get('tls_ms', 0.0), 2)
+        res['cold_total_ms'] = res['total_ms']
     except Exception as e:
         res['is_error'] = True
         res['error_message'] = str(e)
         res['total_ms'] = round((time.perf_counter() - t0) * 1000, 2)
+        res['connect_ms'] = round(res.get('tcp_ms', 0.0) + res.get('tls_ms', 0.0), 2)
+        res['cold_total_ms'] = res['total_ms']
 
     return res
 

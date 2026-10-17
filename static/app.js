@@ -852,30 +852,83 @@ async function viewRecordDetail(recordId) {
 function showDetailModal(r) {
     const body = document.getElementById('detailModalBody');
     const dateStr = new Date(r.timestamp * 1000).toLocaleString();
+    const initConn = ((Number(r.tcp_ms) || 0) + (Number(r.tls_ms) || 0)).toFixed(2);
+    const coldTotal = ((Number(r.dns_ms) || 0) + (Number(r.tcp_ms) || 0) + (Number(r.tls_ms) || 0) + (Number(r.total_ms) || 0)).toFixed(2);
 
     body.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:0.75rem; font-family: var(--font-mono); font-size: 0.88rem;">
-            <div><strong>ID Registro:</strong> #${r.id}</div>
-            <div><strong>Fecha & Hora:</strong> ${dateStr}</div>
-            <div><strong>Sede / Ubicación:</strong> <span class="loc-pill">${r.location || 'Sede Principal'}</span></div>
-            <div><strong>URL Probe:</strong> ${r.url}</div>
-            <div><strong>IP Resuelta:</strong> ${r.ip || 'Sin resolución'}</div>
-            <div><strong>Estado HTTP:</strong> ${r.is_error ? `<span class="text-danger">${r.error_message}</span>` : `HTTP ${r.status_code}`}</div>
-            <div><strong>Tamaño Respuesta:</strong> ${r.response_size_bytes} bytes</div>
+        <div style="display:flex; flex-direction:column; gap:0.85rem; font-family: var(--font-mono); font-size: 0.88rem;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; background:rgba(255,255,255,0.03); padding:0.75rem; border-radius:8px; border:1px solid var(--border-color);">
+                <div><strong>ID Registro:</strong> #${r.id || 'N/A'}</div>
+                <div><strong>Fecha & Hora:</strong> ${dateStr}</div>
+                <div><strong>Sede:</strong> <span class="loc-pill">${r.location || 'Sede Principal'}</span></div>
+                <div><strong>Estado HTTP:</strong> ${r.is_error ? `<span class="text-danger">${r.error_message}</span>` : `<span class="text-success">HTTP ${r.status_code}</span>`}</div>
+                <div style="grid-column: span 2;"><strong>URL Probe:</strong> <span style="color:var(--text-muted); word-break:break-all;">${r.url}</span></div>
+                <div><strong>IP Resuelta:</strong> ${r.ip || 'Sin resolución'}</div>
+                <div><strong>Tamaño Respuesta:</strong> ${r.response_size_bytes} bytes</div>
+            </div>
 
-            <hr style="border-color: var(--border-color); margin: 0.5rem 0;">
+            <!-- Sección 1: Metodología Navegador / PDA (Chrome DevTools) -->
+            <div style="background:rgba(59, 130, 246, 0.08); border:1px solid rgba(59, 130, 246, 0.35); border-radius:8px; padding:0.85rem;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.6rem;">
+                    <strong style="color:var(--accent-blue); display:flex; align-items:center; gap:0.4rem; font-size:0.92rem;">
+                        <i data-lucide="compass" style="width:16px; height:16px;"></i> Latencia Navegador / PDA (Metodología Chrome)
+                    </strong>
+                    <span class="badge badge-blue">Estándar W3C</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.4rem; padding-left:0.25rem;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span><strong>4. Tiempo de Espera (TTFB):</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(Waiting for server response)</span></span>
+                        <strong style="color:var(--accent-emerald);">${r.ttfb_ms} ms</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span><strong>5. Transferencia Datos:</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(Content Download)</span></span>
+                        <strong style="color:var(--text-secondary);">${r.transfer_ms} ms</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.4rem; padding-top:0.5rem; border-top:1px dashed rgba(59,130,246,0.35);">
+                        <strong style="color:var(--accent-blue); font-size:1.05rem;">TIEMPO TOTAL NAVEGADOR:</strong>
+                        <span style="font-size:1.25rem; color: var(--accent-blue); font-weight:bold;">${r.total_ms} ms</span>
+                    </div>
+                </div>
+            </div>
 
-            <div><strong>1. Resolución DNS:</strong> ${r.dns_ms} ms</div>
-            <div><strong>2. Conexión TCP:</strong> ${r.tcp_ms} ms</div>
-            <div><strong>3. TLS/SSL Handshake:</strong> ${r.tls_ms} ms</div>
-            <div><strong>4. Tiempo de Espera (TTFB):</strong> ${r.ttfb_ms} ms</div>
-            <div><strong>5. Transferencia Datos:</strong> ${r.transfer_ms} ms</div>
-            <div style="font-size:1.1rem; color: var(--accent-blue); margin-top:0.4rem;">
-                <strong>TIEMPO TOTAL:</strong> ${r.total_ms} ms
+            <!-- Sección 2: Conexión Inicial de Red (Initial Connection) -->
+            <div style="background:rgba(168, 85, 247, 0.05); border:1px solid rgba(168, 85, 247, 0.25); border-radius:8px; padding:0.85rem;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.6rem;">
+                    <strong style="color:var(--accent-purple); display:flex; align-items:center; gap:0.4rem; font-size:0.92rem;">
+                        <i data-lucide="network" style="width:16px; height:16px;"></i> Conexión Inicial de Red (Initial Connection)
+                    </strong>
+                    <span class="badge badge-purple">Infraestructura</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.4rem; padding-left:0.25rem;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span><strong>1. Resolución DNS:</strong></span>
+                        <span>${r.dns_ms} ms</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span><strong>2. Conexión TCP:</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(Socket 3-Way Handshake)</span></span>
+                        <span>${r.tcp_ms} ms</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span><strong>3. TLS/SSL Handshake:</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(Negociación Cifrada)</span></span>
+                        <span>${r.tls_ms} ms</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-top:0.3rem; padding-top:0.4rem; border-top:1px dashed rgba(168,85,247,0.25); color:var(--accent-purple); font-weight:600;">
+                        <span>Total Conexión Inicial (TCP + TLS):</span>
+                        <span>${initConn} ms</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Explicación Técnica y Cold Start -->
+            <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.45; background:rgba(0,0,0,0.25); padding:0.75rem 0.85rem; border-radius:6px; border-left:3px solid var(--accent-blue);">
+                💡 <strong>¿Por qué el navegador y la PDA muestran ~${r.total_ms} ms?</strong><br>
+                En Chrome y terminales PDA (Resource Timing), las peticiones HTTP reutilizan conexiones persistentes (<em>Keep-Alive</em>). Por tanto, la latencia percibida en cada ping es el tiempo de respuesta HTTP (<strong>${r.total_ms} ms</strong>).<br>
+                Si se suma la conexión en frío desde cero (apertura de socket TCP + TLS + HTTP), el tiempo total acumulado fue de <strong>${coldTotal} ms</strong>.
             </div>
         </div>
     `;
     openModal('detailModal');
+    initLucideIcons();
 }
 
 // Chart.js Initialization
@@ -1056,22 +1109,22 @@ function updatePhaseBarChart(averages) {
 
 const HELP_TOPICS = {
     'total': {
-        title: 'Latencia Total Promedio',
-        subtitle: 'Tiempo Acumulado End-to-End',
+        title: 'Latencia Navegador / PDA (Metodología Chrome)',
+        subtitle: 'Tiempo de Respuesta HTTP (TTFB + Transferencia)',
         badgeClass: 'badge-blue',
-        badgeText: 'Métrica Global',
+        badgeText: 'Metodología Chrome / PDA',
         icon: 'clock',
-        layer: 'Capa 1 a 7 (Extremo a Extremo)',
-        mechanism: 'T_Total = T_DNS + T_TCP + T_TLS + T_TTFB + T_Transfer',
-        description: 'Mide el tiempo total acumulado desde que se inicia la resolución del nombre de dominio hasta que el cliente recibe y descarga completamente la respuesta HTTP devuelta por el servidor de Manhattan. Es la suma estrictamente secuencial y desacoplada de cada fase.',
+        layer: 'Capa de Aplicación HTTP (W3C Resource Timing)',
+        mechanism: 'T_Navegador = T_TTFB + T_Transfer',
+        description: 'Mide la latencia de respuesta HTTP tal como la experimenta una terminal PDA o un navegador Chrome mediante conexiones persistentes Keep-Alive. El handshake de conexión inicial (TCP + TLS) se mide y reporta de forma complementaria para diagnóstico de infraestructura de red.',
         benchmarks: [
-            { label: 'Excelente', range: '< 450 ms', type: 'good', desc: 'Respuesta fluida para terminales RF y estaciones de empaque.' },
-            { label: 'Aceptable', range: '450 - 800 ms', type: 'warn', desc: 'Leve retraso perceptible en operaciones de alta velocidad.' },
-            { label: 'Crítico', range: '> 800 ms', type: 'crit', desc: 'Riesgo inminente de congelamiento o timeout en bodega.' }
+            { label: 'Excelente', range: '< 250 ms', type: 'good', desc: 'Respuesta ultrarrápida para terminales RF y estaciones de empaque.' },
+            { label: 'Aceptable', range: '250 - 500 ms', type: 'warn', desc: 'Respuesta normal en enlace WAN hacia Manhattan.' },
+            { label: 'Crítico', range: '> 600 ms', type: 'crit', desc: 'Retraso elevado en procesamiento del servidor Manhattan o congestión.' }
         ],
-        troubleshooting: 'Si la latencia total es elevada, inspecciona el gráfico de Desglose Temporal Apilado para identificar cuál de las 4 fases (DNS, TCP, TLS o TTFB) causó el incremento.',
-        recommendation: 'Aísla el problema: si TCP es alto el problema es del enlace/ISP; si TTFB es alto el problema es del servidor de Manhattan.',
-        guideTab: 'tab-methodology'
+        troubleshooting: 'Si la latencia del navegador/PDA es elevada, el factor dominante es el TTFB (tiempo de procesamiento y retorno del servidor Manhattan). Si las fases de conexión inicial TCP o TLS son elevadas, el cuello de botella está en el enlace WAN/ISP o en el terminador SSL.',
+        recommendation: 'Compara el TTFB contra el tiempo de Conexión Inicial (TCP + TLS): si TCP es bajo (<80 ms) y TTFB es alto (>350 ms), la causa raíz es del backend de Manhattan.',
+        guideTab: 'tab-devtools'
     },
     'dns': {
         title: 'Fase 1: Resolución DNS',

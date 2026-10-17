@@ -42,6 +42,15 @@ def init_db():
         if 'location' not in columns:
             cursor.execute("ALTER TABLE records ADD COLUMN location TEXT DEFAULT 'Sede Principal'")
 
+        # Migration: Adjust historical total_ms to Browser / PDA methodology (TTFB + Transfer)
+        # Old logic had total_ms = dns + tcp + tls + ttfb + transfer (~380-450ms)
+        # Browser / PDA (Chrome DevTools W3C Resource Timing) measures HTTP response turnaround = TTFB + Transfer (~180-250ms)
+        cursor.execute("""
+            UPDATE records 
+            SET total_ms = ROUND(ttfb_ms + transfer_ms, 2) 
+            WHERE total_ms > (ttfb_ms + transfer_ms + 5) AND is_error = 0 AND (ttfb_ms + transfer_ms) > 0
+        """)
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS net_diag_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -460,36 +469,43 @@ def build_report_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
     peaks = data.get("peaks", {})
     peak = peaks.get("total", 0.0)
 
-    # 1. Root Cause Breakdown (Network vs Backend)
-    if avg_total > 0:
-        ttfb_pct = round((avg_ttfb / avg_total) * 100, 1)
-        tcp_pct = round((avg_tcp / avg_total) * 100, 1)
+    # 1. Root Cause Breakdown (Browser / PDA Latency & Infrastructure)
+    init_conn = round(avg_tcp + avg_tls, 1)
+    cold_total = round(avg_dns + avg_tcp + avg_tls + avg_total, 1)
 
-        if ttfb_pct >= 55:
-            highlights.append({
-                "type": "server",
-                "badge": "Procesamiento Backend",
-                "badge_class": "badge-blue",
-                "title": f"El procesamiento interno del backend Manhattan representó el {ttfb_pct}% del tiempo total",
-                "detail": f"De una latencia promedio de {avg_total} ms, el servidor demoró {avg_ttfb} ms (Fase 4 TTFB) en generar la respuesta HTTP. Esto demuestra que la mayor parte del tiempo transcurre en la aplicación Manhattan y no en la red de la sede."
-            })
-        
-        if tcp_pct >= 25 or avg_tcp > 80:
+    if avg_total > 0:
+        highlights.append({
+            "type": "server",
+            "badge": "Metodología Navegador / PDA",
+            "badge_class": "badge-blue",
+            "title": f"Latencia operativa HTTP promedio: {avg_total} ms (TTFB: {avg_ttfb} ms)",
+            "detail": f"Medida bajo el estándar W3C Resource Timing / Chrome DevTools utilizado por las terminales PDA con conexiones Keep-Alive. El servidor Manhattan demoró {avg_ttfb} ms en procesar y comenzar a responder la solicitud."
+        })
+
+        if avg_tcp > 80:
             highlights.append({
                 "type": "network",
-                "badge": "Red WAN Lenta",
+                "badge": "Transporte WAN Elevado",
                 "badge_class": "badge-amber",
-                "title": f"Fase TCP física elevada ({avg_tcp} ms promedio, {tcp_pct}% del tiempo total)",
-                "detail": "El tiempo de establecimiento del socket 3-Way Handshake es elevado para este enlace, lo que apunta a congestión en el proveedor de internet (ISP) o distancia geográfica considerable al datacenter."
+                "title": f"Fase TCP física elevada ({avg_tcp} ms promedio, Conexión Inicial TCP+TLS: {init_conn} ms)",
+                "detail": "El tiempo del 3-Way Handshake TCP es elevado para este enlace, lo que apunta a congestión en el proveedor de internet (ISP) o distancia geográfica al datacenter."
             })
         else:
             highlights.append({
                 "type": "network",
                 "badge": "Red Física Saludable",
                 "badge_class": "badge-emerald",
-                "title": f"Canal de red físico estable y ágil (TCP promedio: {avg_tcp} ms)",
-                "detail": "El enlace de transporte entre la sede y el balanceador de Manhattan opera dentro de parámetros óptimos de ida y vuelta (1 RTT de transporte puro)."
+                "title": f"Canal de red físico ágil (TCP: {avg_tcp} ms, Conexión Inicial TCP+TLS: {init_conn} ms)",
+                "detail": "El enlace de transporte entre la sede y el balanceador opera dentro de parámetros óptimos de ida y vuelta (1 RTT de transporte puro)."
             })
+
+        highlights.append({
+            "type": "architecture",
+            "badge": "Comparativa de Conexión",
+            "badge_class": "badge-purple",
+            "title": f"Latencia Navegador/PDA: {avg_total} ms vs Arranque en Frío: {cold_total} ms",
+            "detail": f"En producción, la PDA y Chrome mantienen activa la conexión (Keep-Alive), operando a {avg_total} ms. Una conexión desde cero que deba resolver DNS ({avg_dns} ms), abrir socket TCP ({avg_tcp} ms) y negociar TLS ({avg_tls} ms) acumula {cold_total} ms."
+        })
 
     # 2. SLA & Critical Peaks
     if peak > 1500:

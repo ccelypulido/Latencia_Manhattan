@@ -203,7 +203,9 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             timeout = float(query.get("timeout", [cfg.get("timeout_seconds", "5")])[0])
             location_name = cfg.get("location_name", "Sede Principal")
             result = probe.measure_latency(target_url, timeout=timeout, auth_config=cfg)
-            database.save_record(result, location=location_name)
+            rec_id = database.save_record(result, location=location_name)
+            result['id'] = rec_id
+            result['location'] = location_name
             return self.send_json(result)
 
         elif path == "/api/history":

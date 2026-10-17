@@ -125,10 +125,10 @@
                 <!-- Total Latency Card -->
                 <div class="metric-card primary-accent">
                     <div class="card-header">
-                        <span class="card-title"><i data-lucide="clock"></i> Latencia Total Promedio</span>
+                        <span class="card-title"><i data-lucide="clock"></i> Latencia Navegador / PDA</span>
                         <div class="card-header-actions">
-                            <span class="badge badge-blue">Global</span>
-                            <button class="component-help-btn" data-topic="total" title="Ayuda técnica: Latencia Total">
+                            <span class="badge badge-blue">TTFB + Transfer</span>
+                            <button class="component-help-btn" data-topic="total" title="Ayuda técnica: Latencia Navegador / PDA (Metodología Chrome DevTools)">
                                 <i data-lucide="help-circle"></i>
                             </button>
                         </div>
@@ -749,8 +749,9 @@
                 <!-- Tab 3: DevTools / cURL -->
                 <div class="help-tab-content" id="tab-devtools">
                     <div class="help-callout">
-                        <strong>¿Por qué en Chrome DevTools "Initial Connection" incluye a SSL?</strong><br>
-                        En la especificación W3C Resource Timing, la barra <em>"Initial Connection"</em> abarca el tiempo total desde que arranca la conexión hasta que está lista para HTTP (<code>connectEnd - connectStart</code>). Por tanto, en Chrome <strong>Initial Connection es la suma de TCP + SSL</strong>, siendo SSL una sub-barra interna.
+                        <strong>📱 ¿Por qué en la PDA y en Chrome la prueba da ~187 ms y antes sumaba ~386 ms?</strong><br>
+                        En terminales PDA y navegadores como Google Chrome, las peticiones HTTP reutilizan conexiones persistentes (<em>HTTP Keep-Alive</em>). Cuando la PDA realiza la prueba a <code>/ping</code>, la conexión TCP y TLS ya está negociada, por lo que la latencia operativa percibida es puramente el tiempo de respuesta HTTP (<strong>TTFB + Transferencia = ~187 ms</strong>).<br><br>
+                        Si se sumariza la conexión en frío desde cero (apertura de socket TCP + TLS + HTTP), el tiempo total acumulado asciende a <strong>~386 ms</strong>. El Manhattan Latency Analyzer adopta la metodología del navegador para la métrica principal, preservando al mismo tiempo el diagnóstico granular de Conexión Inicial (TCP + TLS) para aislar problemas de red.
                     </div>
 
                     <div class="table-wrapper" style="margin-top: 0.5rem;">
@@ -759,54 +760,66 @@
                                 <tr>
                                     <th>Fase</th>
                                     <th>Manhattan Latency Analyzer</th>
-                                    <th>Chrome DevTools (W3C)</th>
-                                    <th>cURL (curl -w)</th>
+                                    <th>Chrome DevTools (W3C Timing)</th>
+                                    <th>Comportamiento en PDA</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><strong>DNS</strong></td>
-                                    <td><code>dns_ms</code></td>
-                                    <td><code>DNS Lookup</code></td>
-                                    <td><code>time_namelookup</code></td>
+                                    <td><strong>Latencia Navegador (PDA)</strong></td>
+                                    <td><strong><code>total_ms</code></strong> (TTFB + Transfer)</td>
+                                    <td><strong><code>Waiting for response + Content Download</code></strong> (~187 ms)</td>
+                                    <td>Tiempo de respuesta efectivo reportado por la PDA</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>TCP</strong></td>
+                                    <td><strong>Espera Servidor</strong></td>
+                                    <td><code>ttfb_ms</code> (Fase 4)</td>
+                                    <td><code>Waiting for server response (TTFB)</code></td>
+                                    <td>Tiempo de cálculo y retorno de Manhattan</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Transferencia</strong></td>
+                                    <td><code>transfer_ms</code> (Fase 5)</td>
+                                    <td><code>Content Download</code></td>
+                                    <td>Descarga del payload de respuesta</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Conexión Inicial (TCP + TLS)</strong></td>
+                                    <td><code>tcp_ms + tls_ms</code></td>
+                                    <td><strong><code>Initial Connection</code></strong> (TCP + SSL)</td>
+                                    <td>Negociado 1 sola vez y reutilizado (Keep-Alive)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Conexión TCP</strong></td>
                                     <td><code>tcp_ms</code> (Aislado)</td>
                                     <td>Parte de <code>Initial Connection</code></td>
-                                    <td><code>time_connect - time_namelookup</code></td>
+                                    <td>Socket 3-Way Handshake hacia el balanceador</td>
                                 </tr>
                                 <tr>
                                     <td><strong>TLS / SSL</strong></td>
                                     <td><code>tls_ms</code> (Aislado)</td>
                                     <td><code>SSL</code> (Sub-barra interna)</td>
-                                    <td><code>time_appconnect - time_connect</code></td>
+                                    <td>Handshake criptográfico HTTPS</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>TCP + TLS</strong></td>
-                                    <td>Suma analítica (TCP + TLS)</td>
-                                    <td><strong><code>Initial Connection</code></strong></td>
-                                    <td><code>time_appconnect - time_namelookup</code></td>
+                                    <td><strong>Resolución DNS</strong></td>
+                                    <td><code>dns_ms</code></td>
+                                    <td><code>DNS Lookup</code></td>
+                                    <td>Consulta a servidores de nombres</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Espera Servidor</strong></td>
-                                    <td><code>ttfb_ms</code></td>
-                                    <td><code>Waiting for server response</code></td>
-                                    <td><code>time_starttransfer - time_appconnect</code></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Transferencia</strong></td>
-                                    <td><code>transfer_ms</code></td>
-                                    <td><code>Content Download</code></td>
-                                    <td><code>time_total - time_starttransfer</code></td>
+                                    <td><strong>Arranque en Frío (Cold Start)</strong></td>
+                                    <td><code>cold_total_ms</code> (Suma total)</td>
+                                    <td>Tiempo acumulado total desde socket cero (~386 ms)</td>
+                                    <td>Solo ocurre en el primer encendido o reconexión</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
 
                     <div class="help-box" style="margin-top: 0.75rem;">
-                        <div class="help-box-title"><i data-lucide="check-circle-2"></i> Ventaja de la Medición Desacoplada</div>
-                        <p>Al reportar TCP y TLS en dos tarjetas separadas, podemos determinar si un incremento en la latencia es atribuible a <strong>la red/ISP</strong> (TCP alto) o a <strong>la sobrecarga de CPU en el servidor web</strong> (TLS alto).</p>
+                        <div class="help-box-title"><i data-lucide="check-circle-2"></i> Diagnóstico Integral y Preciso</div>
+                        <p>Al alinear la latencia total con la metodología de navegador de la PDA, las métricas del sistema coinciden 1:1 con lo que experimenta el operario de bodega en sus pistolas de radiofrecuencia, permitiendo al mismo tiempo aislar caídas de red física gracias a las fases desacopladas de TCP y TLS.</p>
                     </div>
                 </div>
 
