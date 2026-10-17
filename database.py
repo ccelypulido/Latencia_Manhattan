@@ -582,6 +582,14 @@ def build_report_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
             "text": "Solicitar al proveedor de internet (ISP) una revisión de enrutamiento BGP hacia el datacenter de Manhattan, o implementar políticas de Calidad de Servicio (QoS) para priorizar el tráfico de terminales RF."
         })
 
+    if avg_tls > 120:
+        recommendations.append({
+            "priority": "Media",
+            "priority_class": "badge-amber",
+            "category": "Terminador Criptográfico TLS / SSL",
+            "text": f"La fase de negociación TLS promedió {avg_tls} ms. Validar con el equipo de soporte e infraestructura de Manhattan la compatibilidad con TLS 1.3 (para reducir la negociación a 1 RTT) o verificar si existe sobrecarga de CPU en el balanceador al validar cadenas de certificados."
+        })
+
     if avg_dns > 25:
         recommendations.append({
             "priority": "Media",

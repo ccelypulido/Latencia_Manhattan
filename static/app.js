@@ -1292,7 +1292,7 @@ const HELP_TOPICS = {
         icon: 'bar-chart',
         layer: 'Resumen Global de Fases',
         mechanism: 'Chart.js Bar Chart with dynamic Zero-Scale',
-        description: 'Muestra en barras verticales el tiempo promedio exacto consumido por cada una de las 5 fases de conexión. Proporciona una vista macro para responder de un vistazo: ¿la mayor parte del tiempo se va en la red (TCP) o en el servidor (TTFB)?',
+        description: 'Muestra en barras verticales el tiempo promedio exacto consumido por cada una de las 5 fases de conexión. Proporciona una vista macro para contrastar la infraestructura de conexión inicial (DNS, TCP, TLS) contra el tiempo de respuesta operativo de la aplicación Manhattan (TTFB, Transferencia).',
         benchmarks: [
             { label: 'Proporción Sana', range: 'Red < 35%', type: 'good', desc: 'El canal de red y SSL toma menos de un tercio del tiempo total.' },
             { label: 'Red Saturada', range: 'Red > 60%', type: 'crit', desc: 'La infraestructura de red física está dominando la latencia.' }
@@ -1594,7 +1594,9 @@ function renderReport(data) {
     }
 
     const ttfbPct = data.averages.total > 0 ? Math.round((data.averages.ttfb / data.averages.total) * 100) : 0;
-    const tcpPct = data.averages.total > 0 ? Math.round((data.averages.tcp / data.averages.total) * 100) : 0;
+    const transferPct = data.averages.total > 0 ? Math.max(0, 100 - ttfbPct) : 0;
+    const initConn = ((Number(data.averages.tcp) || 0) + (Number(data.averages.tls) || 0)).toFixed(1);
+    const coldTotal = ((Number(data.averages.dns) || 0) + (Number(data.averages.tcp) || 0) + (Number(data.averages.tls) || 0) + (Number(data.averages.total) || 0)).toFixed(1);
     const nowStr = new Date().toLocaleString();
     const periodStr = (data.period.start === data.period.end) 
         ? data.period.start 
@@ -1676,33 +1678,15 @@ function renderReport(data) {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td><strong>Fase 1: DNS Lookup</strong></td>
-                            <td>Resolución de Nombres Local / ISP</td>
-                            <td class="num">${data.averages.dns} ms</td>
-                            <td class="num">${data.averages.total > 0 ? (data.averages.dns/data.averages.total*100).toFixed(1) : 0}%</td>
-                            <td class="num">-</td>
-                            <td class="num">-</td>
+                        <!-- Bloque 1: Latencia Operativa de Respuesta HTTP -->
+                        <tr class="report-table-group-header">
+                            <td colspan="6" style="background: rgba(59, 130, 246, 0.12); color: var(--accent-blue); font-weight: 700; font-size: 0.8rem; padding: 0.4rem 0.75rem;">
+                                🌐 LATENCIA OPERATIVA DE RESPUESTA HTTP (METODOLOGÍA NAVEGADOR / TERMINALES PDA CON KEEP-ALIVE)
+                            </td>
                         </tr>
-                        <tr>
-                            <td><strong>Fase 2: Conexión TCP</strong></td>
-                            <td>Red WAN / ISP Físico (Handshake)</td>
-                            <td class="num">${data.averages.tcp} ms</td>
-                            <td class="num">${tcpPct}%</td>
-                            <td class="num">-</td>
-                            <td class="num">-</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Fase 3: Negociación TLS</strong></td>
-                            <td>Cifrado SSL / Handshake Seguro</td>
-                            <td class="num">${data.averages.tls} ms</td>
-                            <td class="num">${data.averages.total > 0 ? (data.averages.tls/data.averages.total*100).toFixed(1) : 0}%</td>
-                            <td class="num">-</td>
-                            <td class="num">-</td>
-                        </tr>
-                        <tr style="background: rgba(59, 130, 246, 0.05);">
+                        <tr style="background: rgba(59, 130, 246, 0.04);">
                             <td><strong>Fase 4: TTFB (Backend)</strong></td>
-                            <td>Servidor Manhattan SCE (Cálculo interno)</td>
+                            <td>Servidor Manhattan SCE (Cálculo interno y procesamiento)</td>
                             <td class="num" style="color: var(--accent-blue); font-weight: 700;">${data.averages.ttfb} ms</td>
                             <td class="num" style="color: var(--accent-blue); font-weight: 700;">${ttfbPct}%</td>
                             <td class="num">-</td>
@@ -1710,19 +1694,68 @@ function renderReport(data) {
                         </tr>
                         <tr>
                             <td><strong>Fase 5: Transferencia</strong></td>
-                            <td>Descarga de Payload HTTP</td>
+                            <td>Descarga de Payload HTTP devuelto</td>
                             <td class="num">${data.averages.transfer} ms</td>
-                            <td class="num">${data.averages.total > 0 ? (data.averages.transfer/data.averages.total*100).toFixed(1) : 0}%</td>
+                            <td class="num">${transferPct}%</td>
                             <td class="num">-</td>
                             <td class="num">-</td>
                         </tr>
-                        <tr style="font-weight: 700; background: rgba(255, 255, 255, 0.04); border-top: 2px solid var(--border-color);">
-                            <td>Latencia Total Global</td>
-                            <td>Experiencia Extremo a Extremo</td>
-                            <td class="num" style="font-size: 0.95rem;">${data.averages.total} ms</td>
-                            <td class="num">100%</td>
+                        <tr style="font-weight: 700; background: rgba(59, 130, 246, 0.1); border-top: 1px solid rgba(59, 130, 246, 0.3);">
+                            <td><span style="color: var(--accent-blue);">▶ Latencia Navegador / PDA (TTFB + Transfer)</span></td>
+                            <td>Tiempo de Respuesta Efectivo en Terminal RF / Chrome</td>
+                            <td class="num" style="font-size: 0.95rem; color: var(--accent-blue);">${data.averages.total} ms</td>
+                            <td class="num" style="color: var(--accent-blue);">100%</td>
                             <td class="num">${data.mins.total} ms</td>
                             <td class="num" style="color: var(--accent-rose);">${data.peaks.total} ms</td>
+                        </tr>
+
+                        <!-- Bloque 2: Infraestructura de Red y Conexión Inicial -->
+                        <tr class="report-table-group-header">
+                            <td colspan="6" style="background: rgba(168, 85, 247, 0.12); color: var(--accent-purple); font-weight: 700; font-size: 0.8rem; padding: 0.4rem 0.75rem; border-top: 2px solid var(--border-color);">
+                                🔌 INFRAESTRUCTURA DE RED Y CONEXIÓN INICIAL (INITIAL CONNECTION - SOCKET & CIFRADO)
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fase 1: DNS Lookup</strong></td>
+                            <td>Resolución de Nombres Local / DNS Forwarder</td>
+                            <td class="num">${data.averages.dns} ms</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fase 2: Conexión TCP</strong></td>
+                            <td>Red WAN / ISP Físico (Socket 3-Way Handshake)</td>
+                            <td class="num">${data.averages.tcp} ms</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fase 3: Negociación TLS / SSL</strong></td>
+                            <td>Capa Criptográfica HTTPS / Terminador SSL</td>
+                            <td class="num">${data.averages.tls} ms</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+                        <tr style="font-weight: 700; background: rgba(168, 85, 247, 0.08); border-top: 1px solid rgba(168, 85, 247, 0.25);">
+                            <td><span style="color: var(--accent-purple);">▶ Subtotal Conexión Inicial (TCP + TLS)</span></td>
+                            <td>Establecimiento del Canal Seguro de Transporte</td>
+                            <td class="num" style="color: var(--accent-purple);">${initConn} ms</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+
+                        <!-- Bloque 3: Arranque en Frío -->
+                        <tr style="font-weight: 600; background: rgba(255, 255, 255, 0.03); border-top: 1px solid var(--border-color); font-size: 0.82rem; color: var(--text-muted);">
+                            <td>❄️ Arranque en Frío Acumulado (Cold Start)</td>
+                            <td>Apertura de Socket desde cero (DNS + TCP + TLS + HTTP)</td>
+                            <td class="num" style="color: #fff;">${coldTotal} ms</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1904,9 +1937,9 @@ function renderReport(data) {
         <!-- 4 Executive KPI Cards -->
         <div class="report-kpi-grid">
             <div class="report-kpi-card">
-                <div class="report-kpi-label">Latencia Total Media</div>
+                <div class="report-kpi-label">Latencia Navegador / PDA (Media)</div>
                 <div class="report-kpi-value">${data.averages.total} <span style="font-size: 1rem; font-weight: 500;">ms</span></div>
-                <div class="report-kpi-sub">Backend TTFB: <strong>${data.averages.ttfb} ms</strong> (${ttfbPct}%) | Red TCP: <strong>${data.averages.tcp} ms</strong></div>
+                <div class="report-kpi-sub">Backend TTFB: <strong>${data.averages.ttfb} ms</strong> (${ttfbPct}%) | Conexión Inicial TCP+TLS: <strong>${initConn} ms</strong></div>
             </div>
 
             <div class="report-kpi-card kpi-uptime">

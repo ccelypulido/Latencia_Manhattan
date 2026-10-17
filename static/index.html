@@ -655,6 +655,9 @@
                 <button class="help-tab-btn" data-tab="tab-stats">
                     <i data-lucide="bar-chart-2"></i> 7. Percentiles & Jitter
                 </button>
+                <button class="help-tab-btn" data-tab="tab-network">
+                    <i data-lucide="network"></i> 8. Diagnóstico ICMP & Red
+                </button>
             </div>
 
             <!-- Scrollable Tab Content Body -->
@@ -732,11 +735,21 @@
                 <!-- Tab 2: Metodología & Fórmulas -->
                 <div class="help-tab-content" id="tab-methodology">
                     <div class="help-box">
-                        <div class="help-box-title"><i data-lucide="calculator"></i> Ecuación de Latencia Acumulada</div>
-                        <p>Cada medición en este analizador se calcula mediante temporizadores monótonos de altísima resolución (<code>time.perf_counter()</code>) que no se ven afectados por ajustes en el reloj del sistema:</p>
-                        <div style="font-family: var(--font-mono); font-size: 1rem; color: var(--accent-blue); background: rgba(0,0,0,0.3); padding: 0.85rem; border-radius: 8px; margin: 0.5rem 0; text-align: center;">
-                            T_Total = T_DNS + T_TCP + T_TLS + T_TTFB + T_Transfer
+                        <div class="help-box-title"><i data-lucide="calculator"></i> Ecuaciones de Medición y Metodología de Navegador</div>
+                        <p>Cada medición en este analizador se calcula mediante temporizadores monótonos de altísima resolución (<code>time.perf_counter()</code>). Para replicar con exactitud el comportamiento de las terminales PDA y navegadores web con conexiones persistentes (<em>HTTP Keep-Alive</em>), la aplicación distingue dos ecuaciones:</p>
+                        
+                        <div style="font-family: var(--font-mono); font-size: 0.92rem; color: var(--accent-blue); background: rgba(0,0,0,0.3); padding: 0.85rem; border-radius: 8px; margin: 0.5rem 0; line-height: 1.6;">
+                            <div><strong>1. Latencia Operativa Navegador / PDA (Métrica Principal):</strong></div>
+                            <div style="font-weight: 700; color: #fff; margin: 0.25rem 0;">T_Total = T_TTFB + T_Transfer</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Tiempo de respuesta efectivo de la petición HTTP en la terminal RF / Chrome.</div>
+                            
+                            <hr style="border-color: rgba(255,255,255,0.08); margin: 0.5rem 0;">
+                            
+                            <div><strong>2. Conexión en Frío Acumulada (Cold Start):</strong></div>
+                            <div style="font-weight: 700; color: var(--accent-purple); margin: 0.25rem 0;">T_Cold = T_DNS + T_TCP + T_TLS + T_TTFB + T_Transfer</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Tiempo total requerido si se abre un socket nuevo desde cero (incluyendo DNS y handshakes).</div>
                         </div>
+                        
                         <p>A diferencia de librerías de alto nivel que mezclan tiempos, el motor <code>probe.py</code> cronometra cada llamada al socket de forma aislada para garantizar que <strong>no exista duplicidad ni superposición</strong> en los milisegundos reportados.</p>
                     </div>
 
@@ -933,6 +946,28 @@
                                 <span>Desviación estándar de latencia. Evalúa la estabilidad del canal. Un Jitter &lt; 15 ms indica una red sumamente estable.</span>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Tab 8: Diagnóstico LAN & ICMP -->
+                <div class="help-tab-content" id="tab-network">
+                    <div class="help-callout">
+                        <strong>Aislamiento de Causa Raíz de Infraestructura:</strong> Para determinar si una degradación de latencia ocurre dentro de la LAN de la sede o en el proveedor de internet (ISP), el sistema realiza diagnósticos ICMP hacia 3 destinos clave.
+                    </div>
+
+                    <div class="help-box" style="margin-top: 0.75rem;">
+                        <div class="help-box-title"><i data-lucide="router"></i> 1. Puerta de Enlace Predeterminada (Default Gateway)</div>
+                        <p>Auto-detecta la IP del switch/router de borde local. Mide la latencia pura física de la sede (cableado, switches y cobertura Wi-Fi). Un tiempo <strong>&lt; 3 ms</strong> y <strong>0% pérdida</strong> garantiza que la red interna está en óptimas condiciones. Si supera los 10 ms o presenta pérdida de paquetes, el problema reside 100% en la sede local.</p>
+                    </div>
+
+                    <div class="help-box" style="margin-top: 0.75rem;">
+                        <div class="help-box-title"><i data-lucide="server"></i> 2. Servidores DNS Activos</div>
+                        <p>Evalúa los resolutores configurados en la interfaz de red para comprobar si la Fase 1 (Resolución DNS) sufre retrasos por servidores DNS saturados o fallas en el Active Directory corporativo.</p>
+                    </div>
+
+                    <div class="help-box" style="margin-top: 0.75rem;">
+                        <div class="help-box-title"><i data-lucide="map"></i> 3. IPs Auxiliares y Traceroute Salto a Salto</div>
+                        <p>Permite auditar nodos Core o WAN adicionales y despliega la ruta multi-salto (Hop-by-Hop) identificando con exactitud en qué router o salto del ISP se introduce latencia o pérdida de paquetes.</p>
                     </div>
                 </div>
 
