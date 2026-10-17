@@ -361,3 +361,42 @@ def get_latest_net_diag(location_filter: Optional[str] = None) -> Optional[Dict[
             "location": row["location"],
             "results": json.loads(row["results_json"])
         }
+
+def get_net_diag_runs_list(location_filter: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    """Returns a list of summary records of past network diagnostic runs for the UI selector."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        query = "SELECT id, timestamp, created_at, location FROM net_diag_history WHERE 1=1"
+        params = []
+        if location_filter and location_filter != "all":
+            query += " AND location = ?"
+            params.append(location_filter)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [
+            {
+                "id": r["id"],
+                "timestamp": r["timestamp"],
+                "created_at": r["created_at"],
+                "location": r["location"]
+            }
+            for r in rows
+        ]
+
+def get_net_diag_run_by_id(run_id: int) -> Optional[Dict[str, Any]]:
+    """Retrieves a specific network diagnostic run by its ID."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM net_diag_history WHERE id = ?", (run_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "timestamp": row["timestamp"],
+            "created_at": row["created_at"],
+            "location": row["location"],
+            "results": json.loads(row["results_json"])
+        }

@@ -37,6 +37,14 @@ function setupEventListeners() {
         btnNetDiag.addEventListener('click', runNetworkDiagnostic);
     }
 
+    // Network Diagnostics History Select
+    const historySelect = document.getElementById('netDiagHistorySelect');
+    if (historySelect) {
+        historySelect.addEventListener('change', (e) => {
+            fetchNetDiag(e.target.value);
+        });
+    }
+
     // Modal controls
     document.getElementById('btnOpenConfig').addEventListener('click', () => openModal('configModal'));
     document.getElementById('btnCloseConfig').addEventListener('click', () => closeModal('configModal'));
@@ -85,6 +93,7 @@ function setupEventListeners() {
     // Filters Change
     document.getElementById('filterStatus').addEventListener('change', fetchHistory);
     document.getElementById('filterLocationSelect').addEventListener('change', () => {
+        currentNetDiagRunId = 'latest';
         refreshAllData();
     });
 
@@ -355,20 +364,54 @@ async function fetchComparison() {
     }
 }
 
-// Fetch latest Network Diagnostics (Gateway, DNS & Extra Hosts)
-async function fetchNetDiag() {
+let currentNetDiagRunId = 'latest';
+
+// Fetch Network Diagnostics (Gateway, DNS & Extra Hosts) with History Selector support
+async function fetchNetDiag(targetRunId = null) {
     try {
+        if (targetRunId !== null) {
+            currentNetDiagRunId = targetRunId;
+        }
+
         const loc = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
         let url = '/api/net-diag';
+        const params = [];
         if (loc && loc !== 'all') {
-            url += `?location=${encodeURIComponent(loc)}`;
+            params.push(`location=${encodeURIComponent(loc)}`);
         }
+        if (currentNetDiagRunId && currentNetDiagRunId !== 'latest') {
+            params.push(`run_id=${encodeURIComponent(currentNetDiagRunId)}`);
+        }
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+
         const res = await fetch(url);
         const data = await res.json();
         
         const container = document.getElementById('netDiagContainer');
         const lastRunEl = document.getElementById('netDiagLastRun');
+        const historySelect = document.getElementById('netDiagHistorySelect');
         if (!container) return;
+
+        // Populate history selector dropdown
+        if (historySelect && data.history_runs) {
+            const historyRuns = data.history_runs;
+            let optionsHtml = `<option value="latest">⚡ Más reciente (Automático / Último)</option>`;
+            
+            historyRuns.forEach(r => {
+                const dt = new Date(r.timestamp * 1000);
+                const dateStr = dt.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const isSelected = (String(r.id) === String(currentNetDiagRunId)) ? 'selected' : '';
+                optionsHtml += `<option value="${r.id}" ${isSelected}>Prueba #${r.id} - ${dateStr} ${timeStr} (${r.location})</option>`;
+            });
+
+            historySelect.innerHTML = optionsHtml;
+            if (currentNetDiagRunId === 'latest') {
+                historySelect.value = 'latest';
+            }
+        }
 
         const latest = data.latest;
         if (!latest || !latest.results || latest.results.length === 0) {
@@ -377,7 +420,7 @@ async function fetchNetDiag() {
                 <div class="net-diag-empty">
                     <i data-lucide="activity" style="width: 36px; height: 36px; color: var(--accent-blue); margin-bottom: 0.75rem;"></i>
                     <p style="font-weight: 600; margin-bottom: 0.25rem;">No se han ejecutado diagnósticos de red todavía.</p>
-                    <p style="font-size: 0.85rem;">Presiona "Ejecutar Diagnóstico" para medir latencia, jitter y ruta hacia el Default Gateway, DNS y destinos configurados.</p>
+                    <p style="font-size: 0.85rem;">Presiona "Ejecutar Ahora" o espera la prueba programada cada 15 min.</p>
                 </div>
             `;
             initLucideIcons();
@@ -389,7 +432,8 @@ async function fetchNetDiag() {
             const dt = new Date(latest.timestamp * 1000);
             const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const locStr = latest.location ? ` [${latest.location}]` : '';
-            lastRunEl.textContent = `Última prueba: ${timeStr}${locStr}`;
+            const isHistorical = (currentNetDiagRunId && currentNetDiagRunId !== 'latest');
+            lastRunEl.textContent = `${isHistorical ? `Prueba #${latest.id}:` : 'Última prueba:'} ${timeStr}${locStr}`;
         }
 
         container.innerHTML = latest.results.map(node => renderNetDiagCard(node)).join('');
@@ -535,7 +579,8 @@ async function runNetworkDiagnostic() {
         });
         const data = await res.json();
         if (data.success) {
-            await fetchNetDiag();
+            currentNetDiagRunId = 'latest';
+            await fetchNetDiag('latest');
         } else {
             alert('Error al ejecutar el diagnóstico de red: ' + (data.error || 'Desconocido'));
         }

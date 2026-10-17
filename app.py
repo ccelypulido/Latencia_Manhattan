@@ -18,11 +18,23 @@ HOST = "0.0.0.0"
 # Background thread control
 background_thread = None
 thread_running = True
+last_net_diag_time = 0.0
 
 def background_probe_loop():
-    """Background loop that periodically measures latency based on DB config."""
-    global thread_running
+    """Background loop that periodically measures HTTP latency and runs scheduled network diagnostics every 15 min."""
+    global thread_running, last_net_diag_time
     print("[INFO] Background monitor thread started.")
+
+    # Initialize last_net_diag_time from latest DB run if available
+    try:
+        latest_run = database.get_latest_net_diag()
+        if latest_run and latest_run.get("timestamp"):
+            last_net_diag_time = float(latest_run["timestamp"])
+        else:
+            last_net_diag_time = time.time()
+    except Exception:
+        last_net_diag_time = time.time()
+
     while thread_running:
         try:
             cfg = database.get_config()
@@ -35,6 +47,19 @@ def background_probe_loop():
             if auto_enabled and target_url:
                 result = probe.measure_latency(target_url, timeout=timeout, auth_config=cfg)
                 database.save_record(result, location=location_name)
+
+            # Scheduled 15-minute Network Diagnostic (900 seconds)
+            now_ts = time.time()
+            if auto_enabled and (now_ts - last_net_diag_time >= 900):
+                last_net_diag_time = now_ts
+                try:
+                    extra_targets = cfg.get("extra_ping_targets", "")
+                    print(f"[INFO] Running scheduled 15-min network diagnostic for '{location_name}'...")
+                    net_results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets)
+                    saved_id = database.save_net_diag_run(net_results, location=location_name)
+                    print(f"[INFO] Scheduled network diagnostic saved (ID #{saved_id}, {len(net_results)} targets).")
+                except Exception as nd_err:
+                    print(f"[ERROR] Scheduled network diagnostic error: {nd_err}")
 
             # Sleep in 1-second ticks so we can stop quickly
             for _ in range(int(max(1, interval))):
@@ -133,12 +158,25 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/net-diag":
             location_filter = query.get("location", [None])[0]
-            latest = database.get_latest_net_diag(location_filter=location_filter)
+            run_id = query.get("run_id", [None])[0]
+            
+            run_data = None
+            if run_id and run_id != "latest":
+                try:
+                    run_data = database.get_net_diag_run_by_id(int(run_id))
+                except (ValueError, TypeError):
+                    run_data = None
+
+            if not run_data:
+                run_data = database.get_latest_net_diag(location_filter=location_filter)
+
+            runs_list = database.get_net_diag_runs_list(location_filter=location_filter, limit=50)
             gw = net_diag.detect_default_gateway()
             dns_list = net_diag.detect_dns_servers()
             cfg = database.get_config()
             return self.send_json({
-                "latest": latest,
+                "latest": run_data,
+                "history_runs": runs_list,
                 "detected": {
                     "gateway": gw,
                     "dns_servers": dns_list,
@@ -201,6 +239,8 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             return self.send_json({"success": True, "config": database.get_config()})
 
         elif path == "/api/net-diag/run":
+            global last_net_diag_time
+            last_net_diag_time = time.time()
             cfg = database.get_config()
             location_name = payload.get("location") or cfg.get("location_name", "Sede Principal")
             extra_targets = payload.get("extra_targets") if "extra_targets" in payload else cfg.get("extra_ping_targets", "")
