@@ -400,3 +400,26 @@ def get_net_diag_run_by_id(run_id: int) -> Optional[Dict[str, Any]]:
             "location": row["location"],
             "results": json.loads(row["results_json"])
         }
+
+def get_all_net_diag_history(location_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Retrieves all network diagnostic runs for export."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        query = "SELECT * FROM net_diag_history WHERE 1=1"
+        params = []
+        if location_filter and location_filter != "all":
+            query += " AND location = ?"
+            params.append(location_filter)
+        query += " ORDER BY id ASC"
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [
+            {
+                "id": r["id"],
+                "timestamp": r["timestamp"],
+                "created_at": r["created_at"],
+                "location": r["location"],
+                "results": json.loads(r["results_json"])
+            }
+            for r in rows
+        ]

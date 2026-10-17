@@ -4,6 +4,8 @@ import os
 import csv
 import io
 import urllib.parse
+import zipfile
+import datetime
 import threading
 import time
 from typing import Dict, Any
@@ -70,6 +72,67 @@ def background_probe_loop():
         except Exception as e:
             print(f"[ERROR] Exception in background probe loop: {e}")
             time.sleep(5)
+
+def generate_http_csv(records: list) -> str:
+    """Generates a standard CSV string for HTTP probe latency records."""
+    output = io.StringIO()
+    fieldnames = [
+        "id", "created_at", "location", "url", "ip", "status_code",
+        "dns_ms", "tcp_ms", "tls_ms", "ttfb_ms", "transfer_ms", "total_ms",
+        "is_error", "error_message", "response_size_bytes"
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for r in records:
+        row_copy = {k: r.get(k) for k in fieldnames}
+        writer.writerow(row_copy)
+    return output.getvalue()
+
+def generate_icmp_csv(runs: list) -> str:
+    """Generates a detailed CSV string for ICMP ping and traceroute diagnostic runs."""
+    output = io.StringIO()
+    fieldnames = [
+        "run_id", "created_at", "location", "target_type", "target_name", "target_host",
+        "status", "ping_min_ms", "ping_avg_ms", "ping_max_ms", "jitter_mdev_ms",
+        "packet_loss_pct", "traceroute_hops_count", "traceroute_reached", "traceroute_path", "error"
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for run in runs:
+        run_id = run["id"]
+        created_at = run["created_at"]
+        location = run["location"]
+        for target in run.get("results", []):
+            ping = target.get("ping", {})
+            trace = target.get("traceroute", {})
+            hops = trace.get("hops", [])
+            path_str = ""
+            if hops:
+                path_parts = []
+                for h in hops:
+                    rtt = f"{h['rtt_ms']}ms" if h.get("rtt_ms") is not None else "timeout"
+                    path_parts.append(f"#{h['hop']}:{h['ip']} ({rtt})")
+                path_str = " -> ".join(path_parts)
+
+            writer.writerow({
+                "run_id": run_id,
+                "created_at": created_at,
+                "location": location,
+                "target_type": target.get("type", "extra"),
+                "target_name": target.get("name", target.get("host", "")),
+                "target_host": target.get("host", ""),
+                "status": target.get("status", "healthy"),
+                "ping_min_ms": ping.get("min_ms", ""),
+                "ping_avg_ms": ping.get("avg_ms", ""),
+                "ping_max_ms": ping.get("max_ms", ""),
+                "jitter_mdev_ms": ping.get("mdev_ms", ""),
+                "packet_loss_pct": ping.get("loss_pct", 0.0),
+                "traceroute_hops_count": trace.get("hops_count", len(hops)),
+                "traceroute_reached": trace.get("reached", False),
+                "traceroute_path": path_str,
+                "error": ping.get("error") or trace.get("error") or ""
+            })
+    return output.getvalue()
 
 class LatencyHandler(http.server.BaseHTTPRequestHandler):
     """HTTP Request Handler for Manhattan Latency Analyzer API and Static Web App."""
@@ -189,34 +252,68 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             return self.send_json(cfg)
 
         elif path == "/api/export":
-            export_format = query.get("format", ["csv"])[0].lower()
+            export_type = query.get("type", ["all"])[0].lower()
+            export_format = query.get("format", ["zip" if export_type == "all" else "csv"])[0].lower()
             location_filter = query.get("location", [None])[0]
-            history = database.get_history(limit=10000, offset=0, location_filter=location_filter)
-            if export_format == "json":
-                self.send_json(history)
+
+            loc_suffix = f"_{location_filter}" if (location_filter and location_filter != "all") else ""
+            date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            if export_type == "http":
+                history = database.get_history(limit=50000, offset=0, location_filter=location_filter)
+                if export_format == "json":
+                    return self.send_json(history)
+                csv_content = generate_http_csv(history)
+                filename = f"latencia_http{loc_suffix}_{date_str}.csv"
+                body = csv_content.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/csv; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
                 return
 
-            # CSV Export
-            output = io.StringIO()
-            fieldnames = [
-                "id", "created_at", "location", "url", "ip", "status_code",
-                "dns_ms", "tcp_ms", "tls_ms", "ttfb_ms", "transfer_ms", "total_ms",
-                "is_error", "error_message", "response_size_bytes"
-            ]
-            writer = csv.DictWriter(output, fieldnames=fieldnames)
-            writer.writeheader()
-            for r in history:
-                row_copy = {k: r.get(k) for k in fieldnames}
-                writer.writerow(row_copy)
+            elif export_type == "icmp":
+                net_history = database.get_all_net_diag_history(location_filter=location_filter)
+                if export_format == "json":
+                    return self.send_json(net_history)
+                csv_content = generate_icmp_csv(net_history)
+                filename = f"diagnostico_red_icmp{loc_suffix}_{date_str}.csv"
+                body = csv_content.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/csv; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
 
-            body = output.getvalue().encode('utf-8')
-            self.send_response(200)
-            self.send_header("Content-Type", "text/csv; charset=utf-8")
-            self.send_header("Content-Disposition", 'attachment; filename="latency_history.csv"')
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
+            else:
+                # Default "all": Package both HTTP and ICMP into a single ZIP archive
+                history = database.get_history(limit=50000, offset=0, location_filter=location_filter)
+                net_history = database.get_all_net_diag_history(location_filter=location_filter)
+
+                if export_format == "json":
+                    return self.send_json({"http_latency": history, "network_diagnostics": net_history})
+
+                http_csv = generate_http_csv(history)
+                icmp_csv = generate_icmp_csv(net_history)
+
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                    zf.writestr(f"latencia_http_manhattan{loc_suffix}.csv", http_csv)
+                    zf.writestr(f"diagnostico_red_icmp_traceroute{loc_suffix}.csv", icmp_csv)
+                
+                zip_data = zip_buffer.getvalue()
+                filename = f"auditoria_latencia_red{loc_suffix}_{date_str}.zip"
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Content-Length", str(len(zip_data)))
+                self.end_headers()
+                self.wfile.write(zip_data)
+                return
 
         self.send_error(404, "Endpoint not found")
 

@@ -53,15 +53,46 @@ function setupEventListeners() {
     // Config Save
     document.getElementById('btnSaveConfig').addEventListener('click', saveConfig);
 
-    // Export CSV
-    document.getElementById('btnExport').addEventListener('click', () => {
-        const loc = document.getElementById('filterLocationSelect').value;
-        let url = '/api/export?format=csv';
-        if (loc && loc !== 'all') {
-            url += `&location=${encodeURIComponent(loc)}`;
-        }
-        window.location.href = url;
-    });
+    // Export Dropdown Controls (HTTP & ICMP)
+    const btnExport = document.getElementById('btnExport');
+    const exportDropdown = document.getElementById('exportDropdownMenu');
+    const dropdownWrapper = btnExport ? btnExport.closest('.dropdown-wrapper') : null;
+
+    if (btnExport && exportDropdown) {
+        btnExport.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = exportDropdown.classList.toggle('show');
+            if (dropdownWrapper) dropdownWrapper.classList.toggle('active', isOpen);
+            initLucideIcons();
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.dropdown-wrapper')) {
+                exportDropdown.classList.remove('show');
+                if (dropdownWrapper) dropdownWrapper.classList.remove('active');
+            }
+        });
+
+        // Handle export item clicks (All ZIP, ICMP CSV, HTTP CSV)
+        document.querySelectorAll('.export-menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const type = item.getAttribute('data-type') || 'all';
+                const loc = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
+                
+                let url = `/api/export?type=${encodeURIComponent(type)}`;
+                if (loc && loc !== 'all') {
+                    url += `&location=${encodeURIComponent(loc)}`;
+                }
+
+                exportDropdown.classList.remove('show');
+                if (dropdownWrapper) dropdownWrapper.classList.remove('active');
+                
+                window.location.href = url;
+            });
+        });
+    }
 
     // Clear History
     document.getElementById('btnClearHistory').addEventListener('click', async () => {

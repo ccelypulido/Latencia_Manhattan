@@ -44,9 +44,38 @@
                     <button id="btnOpenConfig" class="btn btn-secondary" title="Configurar parámetros y Sede">
                         <i data-lucide="settings"></i> Configuración
                     </button>
-                    <button id="btnExport" class="btn btn-outline" title="Descargar histórico en CSV">
-                        <i data-lucide="download"></i> Exportar
-                    </button>
+                    <div class="dropdown-wrapper">
+                        <button id="btnExport" class="btn btn-outline" title="Exportar reportes históricos de latencia y red">
+                            <i data-lucide="download"></i> Exportar <i data-lucide="chevron-down" class="dropdown-caret"></i>
+                        </button>
+                        <div class="export-dropdown-menu" id="exportDropdownMenu">
+                            <button type="button" class="export-menu-item" data-type="all">
+                                <div class="export-item-icon"><i data-lucide="archive"></i></div>
+                                <div class="export-item-text">
+                                    <strong>📦 Paquete Completo (HTTP + ICMP)</strong>
+                                    <span>Descargar ambos reportes en archivo ZIP</span>
+                                </div>
+                                <span class="badge-ext">.ZIP</span>
+                            </button>
+                            <div class="export-divider"></div>
+                            <button type="button" class="export-menu-item" data-type="icmp">
+                                <div class="export-item-icon"><i data-lucide="network"></i></div>
+                                <div class="export-item-text">
+                                    <strong>📡 Diagnóstico ICMP & Traceroute</strong>
+                                    <span>Ping, Jitter, Pérdida % y Saltos de Red</span>
+                                </div>
+                                <span class="badge-ext">.CSV</span>
+                            </button>
+                            <button type="button" class="export-menu-item" data-type="http">
+                                <div class="export-item-icon"><i data-lucide="activity"></i></div>
+                                <div class="export-item-text">
+                                    <strong>📊 Latencia HTTP Manhattan</strong>
+                                    <span>Fases de conexión (DNS, TCP, TLS, TTFB)</span>
+                                </div>
+                                <span class="badge-ext">.CSV</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

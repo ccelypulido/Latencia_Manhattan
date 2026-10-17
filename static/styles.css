@@ -1409,3 +1409,124 @@ input:checked + .slider:before { transform: translateX(20px); }
     color: var(--text-secondary);
     text-align: center;
 }
+
+/* ==========================================================================
+   Export Dropdown Menu Styles
+   ========================================================================== */
+
+.dropdown-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-caret {
+    width: 13px;
+    height: 13px;
+    margin-left: 2px;
+    transition: transform 0.2s ease;
+}
+
+.dropdown-wrapper.active .dropdown-caret {
+    transform: rotate(180deg);
+}
+
+.export-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 320px;
+    background: rgba(18, 26, 43, 0.98);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.55), 0 0 20px rgba(56, 189, 248, 0.15);
+    padding: 0.5rem;
+    display: none;
+    flex-direction: column;
+    gap: 0.35rem;
+    z-index: 500;
+    animation: fadeInDown 0.18s ease forwards;
+}
+
+.export-dropdown-menu.show {
+    display: flex;
+}
+
+.export-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.18s ease;
+    width: 100%;
+}
+
+.export-menu-item:hover {
+    background: rgba(56, 189, 248, 0.1);
+    border-color: rgba(56, 189, 248, 0.25);
+    transform: translateX(2px);
+}
+
+.export-item-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--accent-blue);
+    flex-shrink: 0;
+}
+
+.export-menu-item[data-type="all"] .export-item-icon {
+    color: var(--accent-purple);
+    background: rgba(192, 132, 252, 0.15);
+}
+
+.export-menu-item[data-type="icmp"] .export-item-icon {
+    color: var(--accent-emerald);
+    background: rgba(52, 211, 153, 0.15);
+}
+
+.export-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex: 1;
+}
+
+.export-item-text strong {
+    font-size: 0.82rem;
+    color: #fff;
+    display: block;
+}
+
+.export-item-text span {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    display: block;
+}
+
+.badge-ext {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.2rem 0.45rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+}
+
+.export-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+    margin: 0.25rem 0;
+}
