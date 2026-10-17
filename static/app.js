@@ -28,8 +28,70 @@ function initLucideIcons() {
 // Event Listeners setup
 function setupEventListeners() {
     initHelpSystem();
+    // General Auto-probe Stop / Resume Toggle Button
+    const btnToggleAuto = document.getElementById('btnToggleAuto');
+    if (btnToggleAuto) {
+        btnToggleAuto.addEventListener('click', toggleAutoProbe);
+    }
+
     // Manual Probe Trigger
     document.getElementById('btnProbeNow').addEventListener('click', runManualProbe);
+
+    // Report System Triggers & Controls
+    const btnOpenReport = document.getElementById('btnOpenReport');
+    if (btnOpenReport) {
+        btnOpenReport.addEventListener('click', async () => {
+            openModal('reportModal');
+            setReportPreset('today');
+            await loadReportLocations();
+            await fetchAndRenderReport();
+        });
+    }
+
+    const btnCloseReport = document.getElementById('btnCloseReport');
+    if (btnCloseReport) btnCloseReport.addEventListener('click', () => closeModal('reportModal'));
+
+    const btnCloseReportFooter = document.getElementById('btnCloseReportFooter');
+    if (btnCloseReportFooter) btnCloseReportFooter.addEventListener('click', () => closeModal('reportModal'));
+
+    const btnGenerateReport = document.getElementById('btnGenerateReport');
+    if (btnGenerateReport) {
+        btnGenerateReport.addEventListener('click', fetchAndRenderReport);
+    }
+
+    const btnPrintReport = document.getElementById('btnPrintReport');
+    if (btnPrintReport) {
+        btnPrintReport.addEventListener('click', () => window.print());
+    }
+
+    const presetGroup = document.getElementById('reportPresetGroup');
+    if (presetGroup) {
+        presetGroup.addEventListener('click', (e) => {
+            const pill = e.target.closest('.preset-pill');
+            if (pill) {
+                const preset = pill.getAttribute('data-preset');
+                setReportPreset(preset);
+                fetchAndRenderReport();
+            }
+        });
+    }
+
+    const reportStartInput = document.getElementById('reportStartDate');
+    const reportEndInput = document.getElementById('reportEndDate');
+    if (reportStartInput) {
+        reportStartInput.addEventListener('change', () => {
+            document.querySelectorAll('.preset-pill').forEach(b => b.classList.remove('active'));
+        });
+    }
+    if (reportEndInput) {
+        reportEndInput.addEventListener('change', () => {
+            document.querySelectorAll('.preset-pill').forEach(b => b.classList.remove('active'));
+        });
+    }
+    const reportLocSelect = document.getElementById('reportLocationSelect');
+    if (reportLocSelect) {
+        reportLocSelect.addEventListener('change', fetchAndRenderReport);
+    }
 
     // Network Diagnostics Trigger
     const btnNetDiag = document.getElementById('btnRunNetDiag');
@@ -160,6 +222,60 @@ function closeModal(id) {
     if (el) el.classList.remove('active');
 }
 
+// Update Auto-probe UI state (Button, dot, label, icon, config modal)
+function updateAutoProbeUI(isEnabled) {
+    const btnToggle = document.getElementById('btnToggleAuto');
+    const label = document.getElementById('toggleAutoLabel');
+    const dot = document.getElementById('toggleAutoDot');
+    const iconSlot = document.getElementById('toggleAutoIconSlot');
+    const cfgCheckbox = document.getElementById('cfgAutoEnabled');
+
+    if (cfgCheckbox) {
+        cfgCheckbox.checked = isEnabled;
+    }
+
+    if (btnToggle) {
+        if (isEnabled) {
+            btnToggle.classList.remove('paused');
+            btnToggle.classList.add('active');
+            btnToggle.title = 'Pruebas automáticas activas (Clic para detener)';
+            if (label) label.textContent = 'Monitoreando';
+            if (dot) dot.className = 'status-dot pulsing';
+            if (iconSlot) iconSlot.innerHTML = '<i data-lucide="pause-circle" class="btn-inline-icon"></i>';
+        } else {
+            btnToggle.classList.remove('active');
+            btnToggle.classList.add('paused');
+            btnToggle.title = 'Pruebas automáticas pausadas (Clic para reanudar)';
+            if (label) label.textContent = 'Pausado (Detenido)';
+            if (dot) dot.className = 'status-dot';
+            if (iconSlot) iconSlot.innerHTML = '<i data-lucide="play-circle" class="btn-inline-icon"></i>';
+        }
+        initLucideIcons();
+    }
+}
+
+// Toggle Auto-probe execution
+async function toggleAutoProbe() {
+    const btnToggle = document.getElementById('btnToggleAuto');
+    if (btnToggle) btnToggle.style.pointerEvents = 'none';
+
+    try {
+        const res = await fetch('/api/auto-probe/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            updateAutoProbeUI(data.auto_probe_enabled);
+        }
+    } catch (err) {
+        console.error('Error al conmutar monitoreo automático:', err);
+    } finally {
+        if (btnToggle) btnToggle.style.pointerEvents = 'auto';
+    }
+}
+
 // Fetch configuration from server
 async function loadConfig() {
     try {
@@ -194,15 +310,7 @@ async function loadConfig() {
             extraTargetsEl.value = cfg.extra_ping_targets || '';
         }
 
-        const statusLabel = document.querySelector('.status-label');
-        const statusDot = document.querySelector('.status-dot');
-        if (cfg.auto_probe_enabled === '1') {
-            statusLabel.textContent = 'Monitoreando';
-            statusDot.className = 'status-dot pulsing';
-        } else {
-            statusLabel.textContent = 'Pausado';
-            statusDot.className = 'status-dot';
-        }
+        updateAutoProbeUI(cfg.auto_probe_enabled === '1');
     } catch (err) {
         console.error('Error cargando configuración:', err);
     }
@@ -1297,4 +1405,470 @@ function initHelpSystem() {
             initLucideIcons();
         });
     });
+}
+
+/* ==========================================================================
+   EXECUTIVE & DIAGNOSTIC REPORT SYSTEM
+   ========================================================================== */
+let currentReportPreset = 'today';
+
+function getLocalDateString(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function setReportPreset(preset) {
+    currentReportPreset = preset;
+    const startInput = document.getElementById('reportStartDate');
+    const endInput = document.getElementById('reportEndDate');
+    const today = new Date();
+
+    document.querySelectorAll('.preset-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-preset') === preset);
+    });
+
+    if (preset === 'today') {
+        const str = getLocalDateString(today);
+        startInput.value = str;
+        endInput.value = str;
+    } else if (preset === 'yesterday') {
+        const y = new Date(today);
+        y.setDate(y.getDate() - 1);
+        const str = getLocalDateString(y);
+        startInput.value = str;
+        endInput.value = str;
+    } else if (preset === '7d') {
+        const past = new Date(today);
+        past.setDate(past.getDate() - 6);
+        startInput.value = getLocalDateString(past);
+        endInput.value = getLocalDateString(today);
+    } else if (preset === '30d') {
+        const past = new Date(today);
+        past.setDate(past.getDate() - 29);
+        startInput.value = getLocalDateString(past);
+        endInput.value = getLocalDateString(today);
+    } else if (preset === 'all') {
+        startInput.value = '';
+        endInput.value = '';
+    }
+}
+
+async function loadReportLocations() {
+    try {
+        const res = await fetch('/api/locations');
+        const locations = await res.json();
+        const select = document.getElementById('reportLocationSelect');
+        if (!select) return;
+        const curVal = select.value || 'all';
+
+        let html = '<option value="all">Todas las Sedes</option>';
+        locations.forEach(loc => {
+            html += `<option value="${loc}">${loc}</option>`;
+        });
+        select.innerHTML = html;
+        select.value = locations.includes(curVal) ? curVal : 'all';
+    } catch (e) {
+        console.error('Error loading report locations:', e);
+    }
+}
+
+async function fetchAndRenderReport() {
+    const container = document.getElementById('reportPrintArea');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="report-loading-state">
+            <i data-lucide="loader-2" class="spin" style="width: 36px; height: 36px; color: var(--accent-blue);"></i>
+            <p style="margin-top: 0.75rem; color: var(--text-secondary);">Generando informe ejecutivo y calculando hechos técnicos...</p>
+        </div>
+    `;
+    initLucideIcons();
+
+    const start = document.getElementById('reportStartDate').value.trim();
+    const end = document.getElementById('reportEndDate').value.trim();
+    const location = document.getElementById('reportLocationSelect').value;
+
+    const params = new URLSearchParams();
+    if (start) params.append('start', start);
+    if (end) params.append('end', end);
+    if (location && location !== 'all') params.append('location', location);
+
+    try {
+        const res = await fetch(`/api/report?${params.toString()}`);
+        const data = await res.json();
+        renderReport(data);
+    } catch (err) {
+        console.error('Error fetching report:', err);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--accent-rose);">
+                <i data-lucide="alert-triangle" style="width: 32px; height: 32px; margin-bottom: 0.5rem;"></i>
+                <p>Ocurrió un error al compilar el informe. Por favor intenta nuevamente.</p>
+            </div>
+        `;
+        initLucideIcons();
+    }
+}
+
+function renderReport(data) {
+    const container = document.getElementById('reportPrintArea');
+    if (!container) return;
+
+    if (!data || data.total_samples === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);">
+                <i data-lucide="inbox" style="width: 48px; height: 48px; opacity: 0.4; margin-bottom: 0.75rem;"></i>
+                <h3 style="color: #fff; font-size: 1.1rem; margin-bottom: 0.5rem;">Sin Registros en el Período</h3>
+                <p style="font-size: 0.85rem; max-width: 450px; margin: 0 auto;">No se encontraron muestras de latencia entre las fechas seleccionadas o para la sede especificada. Selecciona otro rango de fechas o "Historial Completo".</p>
+            </div>
+        `;
+        initLucideIcons();
+        return;
+    }
+
+    const ttfbPct = data.averages.total > 0 ? Math.round((data.averages.ttfb / data.averages.total) * 100) : 0;
+    const tcpPct = data.averages.total > 0 ? Math.round((data.averages.tcp / data.averages.total) * 100) : 0;
+    const nowStr = new Date().toLocaleString();
+    const periodStr = (data.period.start === data.period.end) 
+        ? data.period.start 
+        : `${data.period.start} al ${data.period.end}`;
+    const locationStr = data.location === 'all' ? 'Todas las Sedes' : data.location;
+    const isSlaCompliant = data.uptime_pct >= 99.0;
+
+    // Highlights HTML
+    let highlightsHtml = '';
+    const highlights = data.analysis?.highlights || [];
+    if (highlights.length > 0) {
+        highlightsHtml = `
+            <div class="report-section">
+                <div class="report-section-title">
+                    <i data-lucide="search"></i> Hechos Relevantes y Diagnóstico de Causa Raíz
+                </div>
+                <div class="report-facts-grid">
+                    ${highlights.map(h => `
+                        <div class="report-fact-card fact-${h.type || 'server'}">
+                            <div class="report-fact-content">
+                                <div class="report-fact-header">
+                                    <span class="report-rec-pill ${h.badge_class || 'badge-blue'}">${h.badge}</span>
+                                    <span class="report-fact-title">${h.title}</span>
+                                </div>
+                                <p class="report-fact-detail">${h.detail}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Recommendations HTML
+    let recsHtml = '';
+    const recommendations = data.analysis?.recommendations || [];
+    if (recommendations.length > 0) {
+        recsHtml = `
+            <div class="report-section">
+                <div class="report-section-title">
+                    <i data-lucide="lightbulb"></i> Sugerencias y Recomendaciones Técnicas
+                </div>
+                <div class="report-recs-grid">
+                    ${recommendations.map(r => {
+                        let prioClass = 'prio-informativa';
+                        if (r.priority === 'Alta') prioClass = 'prio-alta';
+                        else if (r.priority === 'Media') prioClass = 'prio-media';
+                        return `
+                            <div class="report-rec-card">
+                                <span class="report-rec-pill ${prioClass}">Prioridad ${r.priority}</span>
+                                <div class="report-rec-body">
+                                    <div class="report-rec-category">${r.category}</div>
+                                    <p class="report-rec-text">${r.text}</p>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Latency Stages Breakdown Table
+    const breakdownHtml = `
+        <div class="report-section">
+            <div class="report-section-title">
+                <i data-lucide="layers"></i> Desglose Técnico por Fases de Red y Servidor
+            </div>
+            <div class="report-table-wrapper">
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Fase de Comunicación</th>
+                            <th>Entorno Responsable</th>
+                            <th class="num">Promedio</th>
+                            <th class="num">% del Total</th>
+                            <th class="num">Mínimo</th>
+                            <th class="num">Máximo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Fase 1: DNS Lookup</strong></td>
+                            <td>Resolución de Nombres Local / ISP</td>
+                            <td class="num">${data.averages.dns} ms</td>
+                            <td class="num">${data.averages.total > 0 ? (data.averages.dns/data.averages.total*100).toFixed(1) : 0}%</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fase 2: Conexión TCP</strong></td>
+                            <td>Red WAN / ISP Físico (Handshake)</td>
+                            <td class="num">${data.averages.tcp} ms</td>
+                            <td class="num">${tcpPct}%</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fase 3: Negociación TLS</strong></td>
+                            <td>Cifrado SSL / Handshake Seguro</td>
+                            <td class="num">${data.averages.tls} ms</td>
+                            <td class="num">${data.averages.total > 0 ? (data.averages.tls/data.averages.total*100).toFixed(1) : 0}%</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+                        <tr style="background: rgba(59, 130, 246, 0.05);">
+                            <td><strong>Fase 4: TTFB (Backend)</strong></td>
+                            <td>Servidor Manhattan SCE (Cálculo interno)</td>
+                            <td class="num" style="color: var(--accent-blue); font-weight: 700;">${data.averages.ttfb} ms</td>
+                            <td class="num" style="color: var(--accent-blue); font-weight: 700;">${ttfbPct}%</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fase 5: Transferencia</strong></td>
+                            <td>Descarga de Payload HTTP</td>
+                            <td class="num">${data.averages.transfer} ms</td>
+                            <td class="num">${data.averages.total > 0 ? (data.averages.transfer/data.averages.total*100).toFixed(1) : 0}%</td>
+                            <td class="num">-</td>
+                            <td class="num">-</td>
+                        </tr>
+                        <tr style="font-weight: 700; background: rgba(255, 255, 255, 0.04); border-top: 2px solid var(--border-color);">
+                            <td>Latencia Total Global</td>
+                            <td>Experiencia Extremo a Extremo</td>
+                            <td class="num" style="font-size: 0.95rem;">${data.averages.total} ms</td>
+                            <td class="num">100%</td>
+                            <td class="num">${data.mins.total} ms</td>
+                            <td class="num" style="color: var(--accent-rose);">${data.peaks.total} ms</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Percentiles Row -->
+            <div style="display: flex; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-secondary); background: rgba(255,255,255,0.02); padding: 0.5rem 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                <span><strong>Percentiles Totales:</strong></span>
+                <span>P50 (Mediana): <strong style="color: #fff;">${data.percentiles.p50} ms</strong></span>
+                <span>P90: <strong style="color: #fff;">${data.percentiles.p90} ms</strong></span>
+                <span>P95: <strong style="color: #fff;">${data.percentiles.p95} ms</strong></span>
+                <span>P99: <strong style="color: #fff;">${data.percentiles.p99} ms</strong></span>
+                <span>Jitter (Desviación): <strong style="color: #fff;">±${data.jitter} ms</strong></span>
+            </div>
+        </div>
+    `;
+
+    // Daily breakdown table
+    let dailyHtml = '';
+    if (data.daily_breakdown && data.daily_breakdown.length > 0) {
+        dailyHtml = `
+            <div class="report-section">
+                <div class="report-section-title">
+                    <i data-lucide="calendar"></i> Evolución Diaria en el Período
+                </div>
+                <div class="report-table-wrapper">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th class="num">Muestras</th>
+                                <th class="num">Latencia Total Promedio</th>
+                                <th class="num">TTFB Servidor</th>
+                                <th class="num">TCP Físico</th>
+                                <th class="num">Pico Máximo</th>
+                                <th class="num">Errores</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.daily_breakdown.map(d => `
+                                <tr>
+                                    <td><strong>${d.day}</strong></td>
+                                    <td class="num">${d.samples}</td>
+                                    <td class="num">${d.avg_total} ms</td>
+                                    <td class="num">${d.avg_ttfb} ms</td>
+                                    <td class="num">${d.avg_tcp} ms</td>
+                                    <td class="num" style="color: ${d.peak_total > 1000 ? 'var(--accent-rose)' : 'inherit'};">${d.peak_total} ms</td>
+                                    <td class="num" style="color: ${d.errors > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: ${d.errors > 0 ? '700' : 'normal'};">${d.errors}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    // Worst peaks table
+    let peaksHtml = '';
+    if (data.worst_peaks && data.worst_peaks.length > 0) {
+        peaksHtml = `
+            <div class="report-section">
+                <div class="report-section-title">
+                    <i data-lucide="zap-off"></i> Top 5 Peores Picos de Latencia Registrados
+                </div>
+                <div class="report-table-wrapper">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha y Hora</th>
+                                <th>Sede</th>
+                                <th class="num">Latencia Total</th>
+                                <th class="num">TTFB Servidor</th>
+                                <th class="num">TCP Conexión</th>
+                                <th class="num">TLS Handshake</th>
+                                <th>Código / Causa</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.worst_peaks.map(p => `
+                                <tr>
+                                    <td style="font-family: var(--font-mono); font-size: 0.75rem;">${p.created_at}</td>
+                                    <td>${p.location}</td>
+                                    <td class="num" style="color: var(--accent-rose); font-weight: 700;">${p.total_ms} ms</td>
+                                    <td class="num">${p.ttfb_ms} ms</td>
+                                    <td class="num">${p.tcp_ms} ms</td>
+                                    <td class="num">${p.tls_ms} ms</td>
+                                    <td>
+                                        <span class="report-rec-pill ${p.status_code === 200 ? 'prio-alta' : 'prio-media'}">
+                                            HTTP ${p.status_code || 'ERR'}
+                                        </span>
+                                        ${p.error_message ? `<span class="text-xs" style="color: var(--accent-rose); margin-left: 4px;">${p.error_message}</span>` : ''}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    // ICMP Infrastructure Diagnostic Summary
+    const gwPing = data.icmp_summary?.gateway?.avg_ms != null ? `${data.icmp_summary.gateway.avg_ms} ms` : 'N/A';
+    const gwLoss = data.icmp_summary?.gateway?.loss_pct != null ? `${data.icmp_summary.gateway.loss_pct}%` : '0%';
+    const dnsPing = data.icmp_summary?.dns?.avg_ms != null ? `${data.icmp_summary.dns.avg_ms} ms` : 'N/A';
+    const dnsLoss = data.icmp_summary?.dns?.loss_pct != null ? `${data.icmp_summary.dns.loss_pct}%` : '0%';
+    const extraPing = data.icmp_summary?.extra?.avg_ms != null ? `${data.icmp_summary.extra.avg_ms} ms` : 'N/A';
+    const extraLoss = data.icmp_summary?.extra?.loss_pct != null ? `${data.icmp_summary.extra.loss_pct}%` : '0%';
+
+    const icmpHtml = `
+        <div class="report-section">
+            <div class="report-section-title">
+                <i data-lucide="network"></i> Estado de Infraestructura de Red Local e Internet (ICMP & Traceroute)
+            </div>
+            <div class="report-table-wrapper">
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Destino Evaluado</th>
+                            <th>Tipo de Enlace</th>
+                            <th class="num">Latencia ICMP Media</th>
+                            <th class="num">Pérdida de Paquetes</th>
+                            <th>Diagnóstico de Capa Física</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Default Gateway</strong></td>
+                            <td>Puerta de Enlace LAN Local</td>
+                            <td class="num">${gwPing}</td>
+                            <td class="num" style="color: ${parseFloat(gwLoss) > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: 700;">${gwLoss}</td>
+                            <td>${parseFloat(gwLoss) === 0 ? '✅ Segmento LAN Estable sin saturación' : '⚠️ Alerta en Switch o Router local'}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Servidores DNS</strong></td>
+                            <td>Resolutores de Red / WAN</td>
+                            <td class="num">${dnsPing}</td>
+                            <td class="num" style="color: ${parseFloat(dnsLoss) > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: 700;">${dnsLoss}</td>
+                            <td>${parseFloat(dnsLoss) === 0 ? '✅ Resolución DNS sin pérdidas' : '⚠️ Pérdida de paquetes hacia servidores DNS'}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>IPs Adicionales</strong></td>
+                            <td>Nodos Corporativos / Core WAN</td>
+                            <td class="num">${extraPing}</td>
+                            <td class="num" style="color: ${parseFloat(extraLoss) > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: 700;">${extraLoss}</td>
+                            <td>${parseFloat(extraLoss) === 0 ? '✅ Conectividad WAN directa operativa' : '⚠️ Pérdida de paquetes hacia nodos auxiliares'}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    // Render entire document
+    container.innerHTML = `
+        <!-- Document Header -->
+        <div class="report-doc-header">
+            <div class="report-doc-title">
+                <h1>AUDITORÍA DE LATENCIA Y CONECTIVIDAD — MANHATTAN SCE</h1>
+                <p>Informe Técnico de Rendimiento, Correlación de Causa Raíz y Cumplimiento de Niveles de Servicio</p>
+            </div>
+            <div class="report-meta-box">
+                <div class="report-meta-item">
+                    <strong>Período:</strong> <span>${periodStr}</span>
+                </div>
+                <div class="report-meta-item">
+                    <strong>Alcance:</strong> <span>${locationStr}</span>
+                </div>
+                <div class="report-meta-item">
+                    <strong>Muestras:</strong> <span>${data.total_samples} peticiones</span>
+                </div>
+                <div class="report-meta-item">
+                    <strong>Emisión:</strong> <span>${nowStr}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4 Executive KPI Cards -->
+        <div class="report-kpi-grid">
+            <div class="report-kpi-card">
+                <div class="report-kpi-label">Latencia Total Media</div>
+                <div class="report-kpi-value">${data.averages.total} <span style="font-size: 1rem; font-weight: 500;">ms</span></div>
+                <div class="report-kpi-sub">Backend TTFB: <strong>${data.averages.ttfb} ms</strong> (${ttfbPct}%) | Red TCP: <strong>${data.averages.tcp} ms</strong></div>
+            </div>
+
+            <div class="report-kpi-card kpi-uptime">
+                <div class="report-kpi-label">Disponibilidad de Servicio</div>
+                <div class="report-kpi-value" style="color: var(--accent-emerald);">${data.uptime_pct}%</div>
+                <div class="report-kpi-sub">${data.successful_samples} exitosas • ${data.error_samples} fallos (${isSlaCompliant ? 'Cumple SLA' : 'SLA Degradado'})</div>
+            </div>
+
+            <div class="report-kpi-card kpi-peaks">
+                <div class="report-kpi-label">Picos y Percentil 95 (P95)</div>
+                <div class="report-kpi-value" style="color: var(--accent-rose);">${data.percentiles.p95} <span style="font-size: 1rem; font-weight: 500;">ms</span></div>
+                <div class="report-kpi-sub">Pico Máximo: <strong>${data.peaks.total} ms</strong> | Jitter: <strong>±${data.jitter} ms</strong></div>
+            </div>
+
+            <div class="report-kpi-card kpi-lan">
+                <div class="report-kpi-label">Puerta de Enlace LAN</div>
+                <div class="report-kpi-value" style="color: var(--accent-amber);">${gwPing}</div>
+                <div class="report-kpi-sub">Pérdida local: <strong>${gwLoss}</strong> | Pruebas ICMP: <strong>${data.icmp_summary?.total_runs || 0}</strong></div>
+            </div>
+        </div>
+
+        ${highlightsHtml}
+        ${recsHtml}
+        ${breakdownHtml}
+        ${dailyHtml}
+        ${peaksHtml}
+        ${icmpHtml}
+    `;
+
+    initLucideIcons();
 }

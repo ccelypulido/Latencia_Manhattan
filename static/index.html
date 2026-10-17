@@ -31,13 +31,22 @@
                 </div>
 
                 <div class="header-actions">
-                    <div class="status-indicator" id="monitorStatus" title="Estado del monitoreo en segundo plano">
-                        <span class="status-dot pulsing"></span>
-                        <span class="status-label">Monitoreando</span>
-                    </div>
+                    <!-- Botón de Control General de Pruebas Automáticas (Stop / Reanudar) -->
+                    <button type="button" class="status-indicator status-toggle-btn active" id="btnToggleAuto" title="Pruebas automáticas activas (Clic para detener)">
+                        <span class="status-dot pulsing" id="toggleAutoDot"></span>
+                        <span class="status-label" id="toggleAutoLabel">Monitoreando</span>
+                        <span id="toggleAutoIconSlot"><i data-lucide="pause-circle" class="btn-inline-icon"></i></span>
+                    </button>
+
                     <button id="btnProbeNow" class="btn btn-primary" title="Ejecutar prueba de latencia inmediata">
                         <i data-lucide="zap"></i> Probar Ahora
                     </button>
+
+                    <!-- Botón para Generar Informe Ejecutivo y de Diagnóstico -->
+                    <button id="btnOpenReport" class="btn btn-secondary" title="Generar informe de resultados por día o período de días con hallazgos y sugerencias">
+                        <i data-lucide="file-text"></i> Generar Informe
+                    </button>
+
                     <button id="btnOpenHelp" class="btn btn-secondary" title="Sustento Técnico y Guía de Diagnóstico de Red">
                         <i data-lucide="book-open"></i> Guía & Ayuda
                     </button>
@@ -908,6 +917,81 @@
             
             <div class="modal-footer" style="display:flex; justify-content:flex-end;">
                 <button id="btnCloseHelpFooter" class="btn btn-primary btn-sm">Cerrar Guía</button>
+            </div>
+        </div>
+    </div>
+
+        <!-- Modal de Informe Ejecutivo y Diagnóstico -->
+    <div class="modal-overlay" id="reportModal">
+        <div class="modal-card modal-card-xl report-modal-card">
+            <div class="modal-header">
+                <div class="modal-title-with-badge">
+                    <div class="report-header-icon"><i data-lucide="file-text"></i></div>
+                    <div>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; margin: 0; color: #fff;">Informe de Rendimiento y Diagnóstico de Red</h2>
+                        <span class="modal-subtitle">Análisis estadístico por período, hechos relevantes de causa raíz y recomendaciones técnicas</span>
+                    </div>
+                </div>
+                <button class="modal-close no-print" id="btnCloseReport">&times;</button>
+            </div>
+
+            <div class="modal-body" style="max-height: 80vh; overflow-y: auto; padding: 1.25rem;">
+                <!-- Barra de Filtros y Acciones (no-print) -->
+                <div class="report-toolbar no-print">
+                    <div class="report-filter-row">
+                        <div class="report-filter-group">
+                            <span class="report-filter-label"><i data-lucide="calendar"></i> Período Rápido:</span>
+                            <div class="report-preset-pills" id="reportPresetGroup">
+                                <button type="button" class="preset-pill active" data-preset="today">Hoy</button>
+                                <button type="button" class="preset-pill" data-preset="yesterday">Ayer</button>
+                                <button type="button" class="preset-pill" data-preset="7d">Últimos 7 días</button>
+                                <button type="button" class="preset-pill" data-preset="30d">Últimos 30 días</button>
+                                <button type="button" class="preset-pill" data-preset="all">Historial Completo</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="report-filter-row secondary-row">
+                        <div class="report-date-inputs">
+                            <div class="date-field">
+                                <label for="reportStartDate">Desde:</label>
+                                <input type="date" id="reportStartDate" class="form-control form-control-sm">
+                            </div>
+                            <div class="date-field">
+                                <label for="reportEndDate">Hasta:</label>
+                                <input type="date" id="reportEndDate" class="form-control form-control-sm">
+                            </div>
+                            <div class="date-field">
+                                <label for="reportLocationSelect">Sede / Ubicación:</label>
+                                <select id="reportLocationSelect" class="form-control form-control-sm">
+                                    <option value="all">Todas las Sedes</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="report-actions-btn-group">
+                            <button id="btnGenerateReport" class="btn btn-primary btn-sm" title="Actualizar análisis con las fechas seleccionadas">
+                                <i data-lucide="refresh-cw"></i> Actualizar Informe
+                            </button>
+                            <button id="btnPrintReport" class="btn btn-outline btn-sm" title="Imprimir informe en formato corporativo o guardar como PDF">
+                                <i data-lucide="printer"></i> Imprimir / Guardar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lienzo del Informe Imprimible -->
+                <div id="reportPrintArea" class="report-print-container">
+                    <div class="report-loading-state">
+                        <i data-lucide="loader-2" class="spin" style="width: 36px; height: 36px; color: var(--accent-blue);"></i>
+                        <p style="margin-top: 0.75rem; color: var(--text-secondary);">Compilando métricas y análisis de diagnóstico...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer no-print" style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-xs text-muted">Auditoría de Rendimiento • Manhattan Associates SCE Connectivity</span>
+                <button id="btnCloseReportFooter" class="btn btn-secondary btn-sm">Cerrar</button>
             </div>
         </div>
     </div>

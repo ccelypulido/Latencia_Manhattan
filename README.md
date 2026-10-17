@@ -164,6 +164,37 @@ Para aislar si una degradación de latencia se origina dentro de la red local de
 
 ---
 
+## ⏸️ Control General de Pruebas Automáticas (Botón Stop / Reanudar)
+
+En la barra de navegación superior se encuentra un botón de control en tiempo real:
+- **Estado Activo (Verde Pulsante):** Las pruebas periódicas HTTP (cada 10s) y el diagnóstico de red ICMP (cada 15 min) se ejecutan continuamente en segundo plano.
+- **Detención Inmediata (Clic en el botón):** Conmuta instantáneamente a `Pausado (Detenido)` (ámbar estático), suspendiendo las solicitudes automáticas sin cerrar el servidor ni alterar los datos almacenados.
+- **Reanudación:** Al volver a hacer clic, el monitoreo se reanuda de inmediato.
+
+---
+
+## 📄 Generador de Informes Ejecutivos y Diagnóstico Técnico
+
+Permite emitir reportes formales de rendimiento para auditorías internas, presentación a proveedores de internet (ISP) o al equipo de infraestructura de Manhattan:
+
+1. **Filtro Temporal Flexible:**
+   - Presets directos: *Hoy*, *Ayer*, *Últimos 7 días*, *Últimos 30 días*, *Historial Completo*.
+   - Selector manual de fechas (*Desde* / *Hasta*) y filtro por Sede operativa.
+2. **Hechos y Hallazgos Relevantes (Fact Highlights):**
+   - Motor analítico que detecta automáticamente si la latencia proviene del **Procesamiento Interno de Manhattan (TTFB)** o de la **Red Física / ISP (Handshake TCP)**.
+   - Resalta picos críticos, percentil 95 (P95), disponibilidad SLA y estado de la red LAN local.
+3. **Sugerencias y Recomendaciones Técnicas Priorizadas:**
+   - Consejos accionables clasificados por prioridad (*Alta*, *Media*, *Informativa*) para optimización de Wi-Fi, negociación de SLAs o dimensionamiento de switches.
+4. **Desglose Técnico y Tablas Detalladas:**
+   - Tabla comparativa de fases de red y servidor con porcentajes de contribución.
+   - Evolución diaria de latencia, picos y errores.
+   - Top 5 de peores picos registrados con marca de tiempo y causa raíz.
+   - Estado de infraestructura ICMP (Default Gateway, DNS e IPs auxiliares).
+5. **Impresión Corporativa y Guardado en PDF:**
+   - Botón integrado `Imprimir / Guardar PDF` con hoja de estilos `@media print` optimizada para documentos limpios de alto contraste sin fondos oscuros innecesarios.
+
+---
+
 ## 🛠️ Requisitos de Sistema
 
 - **Python 3.8+** (utiliza únicamente la librería estándar de Python; no requiere instalar paquetes mediante `pip` ni dependencias externas).

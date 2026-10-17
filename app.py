@@ -247,6 +247,15 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
                 }
             })
 
+        elif path == "/api/report":
+            start_date = query.get("start", [None])[0]
+            end_date = query.get("end", [None])[0]
+            location_filter = query.get("location", [None])[0]
+            if location_filter == "all" or location_filter == "":
+                location_filter = None
+            report_data = database.get_report_data(start_date=start_date, end_date=end_date, location_filter=location_filter)
+            return self.send_json(report_data)
+
         elif path == "/api/config":
             cfg = database.get_config()
             return self.send_json(cfg)
@@ -349,6 +358,21 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
                 "results": results,
                 "location": location_name,
                 "timestamp": time.time()
+            })
+
+        elif path == "/api/auto-probe/toggle":
+            cfg = database.get_config()
+            current_state = cfg.get("auto_probe_enabled", "1") == "1"
+            if "enabled" in payload:
+                new_state = "1" if payload["enabled"] else "0"
+            else:
+                new_state = "0" if current_state else "1"
+            database.set_config_key("auto_probe_enabled", new_state)
+            is_enabled = (new_state == "1")
+            return self.send_json({
+                "success": True,
+                "auto_probe_enabled": is_enabled,
+                "message": "Monitoreo automático " + ("reanudado" if is_enabled else "pausado")
             })
 
         elif path == "/api/clear":
