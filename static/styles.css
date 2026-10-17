@@ -1057,3 +1057,226 @@ input:checked + .slider:before { transform: translateX(20px); }
 .help-callout strong {
     color: var(--accent-blue);
 }
+
+/* ==========================================================================
+   Network Infrastructure Diagnostic Section Styles
+   ========================================================================== */
+
+.net-diag-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1rem;
+}
+
+.net-node-card {
+    background: rgba(30, 41, 59, 0.45);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.net-node-card:hover {
+    border-color: var(--border-glow);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.net-node-card.status-healthy {
+    border-left: 4px solid var(--accent-emerald);
+}
+
+.net-node-card.status-degraded {
+    border-left: 4px solid var(--accent-amber);
+}
+
+.net-node-card.status-down {
+    border-left: 4px solid var(--accent-rose);
+}
+
+.net-node-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.net-node-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.net-node-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--accent-blue);
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.net-node-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.net-node-host {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.net-node-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+/* Ping metrics grid inside card */
+.net-ping-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    background: rgba(15, 23, 42, 0.5);
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.net-stat-box {
+    display: flex;
+    flex-direction: column;
+}
+
+.net-stat-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.net-stat-value {
+    font-family: var(--font-mono);
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+}
+
+.net-stat-unit {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.net-stat-sub {
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    margin-top: 0.15rem;
+}
+
+/* Traceroute accordion inside card */
+.net-trace-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 0.75rem;
+}
+
+.net-trace-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--accent-blue);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    width: 100%;
+}
+
+.net-trace-toggle-btn:hover {
+    text-decoration: underline;
+}
+
+.net-trace-hops-list {
+    display: none;
+    flex-direction: column;
+    gap: 0.35rem;
+    background: rgba(15, 23, 42, 0.7);
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.net-trace-hops-list.expanded {
+    display: flex;
+}
+
+.hop-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.hop-num {
+    color: var(--accent-purple);
+    font-weight: 700;
+    width: 24px;
+}
+
+.hop-ip {
+    color: var(--text-primary);
+    flex: 1;
+    margin: 0 0.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hop-rtt {
+    color: var(--accent-emerald);
+    font-weight: 600;
+}
+
+.hop-timeout {
+    color: var(--accent-rose);
+    font-style: italic;
+}
+
+.net-diag-empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+    background: rgba(30, 41, 59, 0.3);
+    border-radius: 12px;
+    border: 1px dashed var(--border-color);
+    color: var(--text-secondary);
+    text-align: center;
+}

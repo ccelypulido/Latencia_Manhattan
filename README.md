@@ -141,6 +141,29 @@ Existe una diferencia conceptual importante en cómo las herramientas de la indu
 - **Percentil P95 y P99:** El percentil 95 indica el valor por debajo del cual se encuentra el 95% de las peticiones. Es el estándar de oro en SLAs de sistemas de misión crítica (WMS/SCE), ya que los promedios suelen esconder picos esporádicos graves (*micro-bursts*).
 - **Jitter (Desviación Estándar):** Mide la variabilidad o consistencia temporal de la conexión. Un Jitter bajo (<10 ms) indica un canal sumamente estable; un Jitter alto (>50 ms) refleja inestabilidad en la ruta, fluctuación Wi-Fi o saturación intermitente del canal de subida.
 
+## 🌐 Diagnóstico de Infraestructura de Red (Ping, Traceroute & Hosts Adicionales)
+
+Para aislar si una degradación de latencia se origina dentro de la red local de la sede (LAN), en el proveedor de internet (ISP) o en el datacenter de la aplicación, el sistema incluye un módulo de diagnóstico de infraestructura que audita en paralelo:
+
+1. **Puerta de Enlace Predeterminada (Default Gateway):**
+   - Auto-detecta la IP del router/switch de salida local (`/proc/net/route` en Linux, PowerShell/WMI en Windows).
+   - Ejecuta Ping ICMP para medir la latencia física pura de la red de la sede y descartar pérdidas locales.
+   - *Criterio:* Una latencia >5 ms o cualquier pérdida hacia el Gateway evidencia problemas en switch local, Wi-Fi o cableado físico.
+
+2. **Servidores DNS Activos:**
+   - Detecta automáticamente los servidores DNS asignados a la interfaz de red (vía `resolvectl`, `/etc/resolv.conf` o PowerShell).
+   - Evalúa la latencia y estabilidad del resolver para verificar si los cuellos de botella en la Fase 1 (Resolución DNS) provienen del Active Directory / DNS local.
+
+3. **Nodos e IPs Adicionales Configurables:**
+   - En el menú `⚙️ Configuración`, en el campo **"IPs / Hosts Adicionales para Diagnóstico de Red"**, puedes registrar IPs públicas, enlaces dedicados o routers secundarios separados por coma (ej. `8.8.8.8, 1.1.1.1, 10.0.0.50`).
+   - El sistema ejecuta pruebas concurrentes en hilos independientes sin bloquear la medición periódica de Manhattan.
+
+4. **Traceroute Salto por Salto (Hop-by-Hop):**
+   - Rastrea la cadena completa de enrutamiento con utilidades del sistema (`mtr`, `tracepath`, `traceroute` en Linux; `tracert` en Windows).
+   - Cada tarjeta en el dashboard incluye un acordeón desplegable **"Ruta Traceroute (X saltos)"** que muestra la IP de cada enrutador intermedio y su RTT milisegundo a milisegundo, localizando de inmediato el salto exacto donde se genera congestión WAN.
+
+---
+
 ## 🛠️ Requisitos de Sistema
 
 - **Python 3.8+** (utiliza únicamente la librería estándar de Python; no requiere instalar paquetes mediante `pip` ni dependencias externas).

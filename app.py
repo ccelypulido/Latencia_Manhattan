@@ -10,6 +10,7 @@ from typing import Dict, Any
 
 import database
 import probe
+import net_diag
 
 PORT = 8080
 HOST = "0.0.0.0"
@@ -130,6 +131,21 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             comparison = database.get_location_comparison()
             return self.send_json(comparison)
 
+        elif path == "/api/net-diag":
+            location_filter = query.get("location", [None])[0]
+            latest = database.get_latest_net_diag(location_filter=location_filter)
+            gw = net_diag.detect_default_gateway()
+            dns_list = net_diag.detect_dns_servers()
+            cfg = database.get_config()
+            return self.send_json({
+                "latest": latest,
+                "detected": {
+                    "gateway": gw,
+                    "dns_servers": dns_list,
+                    "extra_targets": cfg.get("extra_ping_targets", "")
+                }
+            })
+
         elif path == "/api/config":
             cfg = database.get_config()
             return self.send_json(cfg)
@@ -183,6 +199,20 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             for k, v in payload.items():
                 database.set_config_key(k, str(v))
             return self.send_json({"success": True, "config": database.get_config()})
+
+        elif path == "/api/net-diag/run":
+            cfg = database.get_config()
+            location_name = payload.get("location") or cfg.get("location_name", "Sede Principal")
+            extra_targets = payload.get("extra_targets") if "extra_targets" in payload else cfg.get("extra_ping_targets", "")
+            results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets)
+            saved_id = database.save_net_diag_run(results, location=location_name)
+            return self.send_json({
+                "success": True,
+                "id": saved_id,
+                "results": results,
+                "location": location_name,
+                "timestamp": time.time()
+            })
 
         elif path == "/api/clear":
             query = urllib.parse.parse_qs(parsed.query)

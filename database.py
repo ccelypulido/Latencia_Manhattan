@@ -1,6 +1,7 @@
 import sqlite3
 import datetime
 import math
+import json
 from typing import Dict, Any, List, Optional
 
 DB_FILE = "latency_history.db"
@@ -42,6 +43,16 @@ def init_db():
             cursor.execute("ALTER TABLE records ADD COLUMN location TEXT DEFAULT 'Sede Principal'")
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS net_diag_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                location TEXT DEFAULT 'Sede Principal',
+                results_json TEXT NOT NULL
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS config (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -59,7 +70,8 @@ def init_db():
             "auth_domain": "",
             "auth_user": "",
             "auth_password": "",
-            "auth_token": ""
+            "auth_token": "",
+            "extra_ping_targets": ""
         }
         for k, v in defaults.items():
             cursor.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
@@ -303,6 +315,49 @@ def clear_records(location_filter: Optional[str] = None):
         cursor = conn.cursor()
         if location_filter and location_filter != 'all':
             cursor.execute("DELETE FROM records WHERE location = ?", (location_filter,))
+            cursor.execute("DELETE FROM net_diag_history WHERE location = ?", (location_filter,))
         else:
             cursor.execute("DELETE FROM records")
+            cursor.execute("DELETE FROM net_diag_history")
         conn.commit()
+
+
+def save_net_diag_run(results: List[Dict[str, Any]], location: Optional[str] = None) -> int:
+    """Saves a full network diagnostic run (Gateway, DNS, Extra IPs) to SQLite."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    created_at = now.isoformat()
+    ts = now.timestamp()
+    if not location:
+        cfg = get_config()
+        location = cfg.get("location_name", "Sede Principal")
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO net_diag_history (timestamp, created_at, location, results_json)
+            VALUES (?, ?, ?, ?)
+        """, (ts, created_at, location, json.dumps(results)))
+        conn.commit()
+        return cursor.lastrowid
+
+def get_latest_net_diag(location_filter: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Retrieves the most recent network diagnostic run for a location."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        query = "SELECT * FROM net_diag_history WHERE 1=1"
+        params = []
+        if location_filter and location_filter != "all":
+            query += " AND location = ?"
+            params.append(location_filter)
+        query += " ORDER BY id DESC LIMIT 1"
+        cursor.execute(query, params)
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "timestamp": row["timestamp"],
+            "created_at": row["created_at"],
+            "location": row["location"],
+            "results": json.loads(row["results_json"])
+        }

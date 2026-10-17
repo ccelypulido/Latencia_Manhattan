@@ -335,6 +335,35 @@
                 </div>
             </section>
 
+            <!-- Network Diagnostic Panel (Gateway, DNS & Extra Targets) -->
+            <section class="panel-card glow-card" id="networkDiagnosticSection">
+                <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <div class="header-help-group">
+                            <h2><i data-lucide="network"></i> Diagnóstico de Infraestructura de Red (Gateway, DNS & Hosts)</h2>
+                            <button class="component-help-btn" data-topic="net-diag" title="Ayuda técnica: Diagnóstico de Red (Ping & Traceroute)">
+                                <i data-lucide="help-circle"></i>
+                            </button>
+                        </div>
+                        <p class="chart-subtitle">Análisis de latencia ICMP, pérdida de paquetes, jitter y saltos de enrutamiento hacia la puerta de enlace, resolutores DNS y destinos configurados</p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span id="netDiagLastRun" class="text-muted" style="font-size: 0.8rem; font-family: var(--font-mono);">Sin pruebas ejecutadas</span>
+                        <button id="btnRunNetDiag" class="btn btn-secondary btn-sm" title="Ejecutar prueba de Ping y Traceroute en paralelo">
+                            <i data-lucide="play"></i> Ejecutar Diagnóstico
+                        </button>
+                    </div>
+                </div>
+
+                <div class="net-diag-grid" id="netDiagContainer">
+                    <div class="net-diag-empty">
+                        <i data-lucide="activity" style="width: 36px; height: 36px; color: var(--accent-blue); margin-bottom: 0.75rem;"></i>
+                        <p style="font-weight: 600; margin-bottom: 0.25rem;">No se han ejecutado diagnósticos de red todavía.</p>
+                        <p style="font-size: 0.85rem;">Presiona "Ejecutar Diagnóstico" para medir latencia, jitter y ruta hacia el Default Gateway, DNS y destinos configurados.</p>
+                    </div>
+                </div>
+            </section>
+
             <!-- Historical Log Table -->
             <section class="history-section glow-card">
                 <div class="table-header-panel">
@@ -470,6 +499,18 @@
                         <label for="cfgAuthToken">Token de Autorización / Cookie:</label>
                         <input type="text" id="cfgAuthToken" class="form-input" placeholder="Ej: FedAuth=...; o JSESSIONID=... o Bearer eyJ...">
                     </div>
+                </div>
+
+                <hr style="border-color: var(--border-color); margin: 1.25rem 0;">
+
+                <div class="form-group">
+                    <label for="cfgExtraTargets" class="font-bold flex items-center gap-2">
+                        <i data-lucide="network"></i> IPs / Hosts Adicionales para Diagnóstico de Red:
+                    </label>
+                    <input type="text" id="cfgExtraTargets" class="form-input" placeholder="Ej: 8.8.8.8, 1.1.1.1, 10.0.0.50 (separados por coma)">
+                    <small class="form-hint text-muted" style="display:block; margin-top:0.35rem; font-size:0.75rem;">
+                        El diagnóstico siempre incluye automáticamente el Gateway Predeterminado y los Servidores DNS activos del sistema. Ingresa aquí direcciones IP o nombres de host adicionales que desees auditar con Ping ICMP y Traceroute.
+                    </small>
                 </div>
             </div>
             <div class="modal-footer">

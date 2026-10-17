@@ -31,6 +31,12 @@ function setupEventListeners() {
     // Manual Probe Trigger
     document.getElementById('btnProbeNow').addEventListener('click', runManualProbe);
 
+    // Network Diagnostics Trigger
+    const btnNetDiag = document.getElementById('btnRunNetDiag');
+    if (btnNetDiag) {
+        btnNetDiag.addEventListener('click', runNetworkDiagnostic);
+    }
+
     // Modal controls
     document.getElementById('btnOpenConfig').addEventListener('click', () => openModal('configModal'));
     document.getElementById('btnCloseConfig').addEventListener('click', () => closeModal('configModal'));
@@ -142,6 +148,12 @@ async function loadConfig() {
 
         document.getElementById('tokenGroup').style.display = ((cfg.auth_type || 'ntlm') === 'bearer') ? 'block' : 'none';
 
+        // Extra ping targets
+        const extraTargetsEl = document.getElementById('cfgExtraTargets');
+        if (extraTargetsEl) {
+            extraTargetsEl.value = cfg.extra_ping_targets || '';
+        }
+
         const statusLabel = document.querySelector('.status-label');
         const statusDot = document.querySelector('.status-dot');
         if (cfg.auto_probe_enabled === '1') {
@@ -170,6 +182,7 @@ async function saveConfig() {
     const authUser = document.getElementById('cfgAuthUser').value.trim();
     const authPassword = document.getElementById('cfgAuthPassword').value;
     const authToken = document.getElementById('cfgAuthToken').value.trim();
+    const extraTargets = document.getElementById('cfgExtraTargets') ? document.getElementById('cfgExtraTargets').value.trim() : '';
 
     if (!targetUrl) {
         alert('Por favor ingrese una URL válida.');
@@ -191,7 +204,8 @@ async function saveConfig() {
                 auth_domain: authDomain,
                 auth_user: authUser,
                 auth_password: authPassword,
-                auth_token: authToken
+                auth_token: authToken,
+                extra_ping_targets: extraTargets
             })
         });
 
@@ -257,7 +271,8 @@ async function refreshAllData() {
     await Promise.all([
         fetchStats(),
         fetchHistory(),
-        fetchComparison()
+        fetchComparison(),
+        fetchNetDiag()
     ]);
 }
 
@@ -337,6 +352,200 @@ async function fetchComparison() {
 
     } catch (err) {
         console.error('Error fetching comparison:', err);
+    }
+}
+
+// Fetch latest Network Diagnostics (Gateway, DNS & Extra Hosts)
+async function fetchNetDiag() {
+    try {
+        const loc = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
+        let url = '/api/net-diag';
+        if (loc && loc !== 'all') {
+            url += `?location=${encodeURIComponent(loc)}`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        const container = document.getElementById('netDiagContainer');
+        const lastRunEl = document.getElementById('netDiagLastRun');
+        if (!container) return;
+
+        const latest = data.latest;
+        if (!latest || !latest.results || latest.results.length === 0) {
+            if (lastRunEl) lastRunEl.textContent = 'Sin pruebas ejecutadas';
+            container.innerHTML = `
+                <div class="net-diag-empty">
+                    <i data-lucide="activity" style="width: 36px; height: 36px; color: var(--accent-blue); margin-bottom: 0.75rem;"></i>
+                    <p style="font-weight: 600; margin-bottom: 0.25rem;">No se han ejecutado diagnósticos de red todavía.</p>
+                    <p style="font-size: 0.85rem;">Presiona "Ejecutar Diagnóstico" para medir latencia, jitter y ruta hacia el Default Gateway, DNS y destinos configurados.</p>
+                </div>
+            `;
+            initLucideIcons();
+            return;
+        }
+
+        // Format timestamp
+        if (latest.timestamp && lastRunEl) {
+            const dt = new Date(latest.timestamp * 1000);
+            const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const locStr = latest.location ? ` [${latest.location}]` : '';
+            lastRunEl.textContent = `Última prueba: ${timeStr}${locStr}`;
+        }
+
+        container.innerHTML = latest.results.map(node => renderNetDiagCard(node)).join('');
+        initLucideIcons();
+    } catch (err) {
+        console.error('Error fetching net-diag:', err);
+    }
+}
+
+// Render individual node card for network diagnostics
+function renderNetDiagCard(node) {
+    const status = node.status || 'healthy';
+    const statusLabels = {
+        'healthy': 'En Línea (Normal)',
+        'degraded': 'Degradado / Alto RTT',
+        'down': 'Sin Respuesta'
+    };
+    const badgeStyles = {
+        'healthy': 'background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3);',
+        'degraded': 'background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3);',
+        'down': 'background: rgba(239, 68, 68, 0.15); color: var(--accent-rose); border: 1px solid rgba(239, 68, 68, 0.3);'
+    };
+    const typeBadges = {
+        'gateway': '<span class="status-badge" style="background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); border: 1px solid rgba(59, 130, 246, 0.3);">Gateway</span>',
+        'dns': '<span class="status-badge" style="background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); border: 1px solid rgba(6, 182, 212, 0.3);">DNS</span>',
+        'extra': '<span class="status-badge" style="background: rgba(168, 85, 247, 0.15); color: var(--accent-purple); border: 1px solid rgba(168, 85, 247, 0.3);">Host Extra</span>'
+    };
+    const icons = {
+        'gateway': 'router',
+        'dns': 'server',
+        'extra': 'globe'
+    };
+
+    const iconName = icons[node.type] || 'network';
+    const ping = node.ping || {};
+    const trace = node.traceroute || {};
+    const hops = trace.hops || [];
+
+    const avgMs = (ping.avg_ms !== null && ping.avg_ms !== undefined) ? ping.avg_ms.toFixed(1) : '--';
+    const lossPct = (ping.loss_pct !== null && ping.loss_pct !== undefined) ? ping.loss_pct.toFixed(0) : '0';
+    const minMs = (ping.min_ms !== null && ping.min_ms !== undefined) ? ping.min_ms.toFixed(1) : '--';
+    const maxMs = (ping.max_ms !== null && ping.max_ms !== undefined) ? ping.max_ms.toFixed(1) : '--';
+    const jitterMs = (ping.mdev_ms !== null && ping.mdev_ms !== undefined) ? `±${ping.mdev_ms.toFixed(1)} ms` : '--';
+
+    let hopsHtml = '';
+    if (hops.length > 0) {
+        hopsHtml = hops.map(h => {
+            const isTimeout = h.status === 'timeout' || h.ip === '*' || h.rtt_ms === null;
+            return `
+                <div class="hop-item">
+                    <span class="hop-num">#${h.hop}</span>
+                    <span class="hop-ip" title="${h.ip}">${h.ip}</span>
+                    ${isTimeout 
+                        ? `<span class="hop-timeout">* Timeout</span>` 
+                        : `<span class="hop-rtt">${h.rtt_ms.toFixed(1)} ms</span>`}
+                </div>
+            `;
+        }).join('');
+    } else {
+        hopsHtml = `<div class="text-muted" style="font-size: 0.78rem; padding: 0.25rem;">${trace.error || 'Sin saltos disponibles (destino local o traceroute bloqueado)'}</div>`;
+    }
+
+    const uniqueId = 'trace_' + Math.random().toString(36).substring(2, 9);
+
+    return `
+        <div class="net-node-card status-${status}">
+            <div class="net-node-header">
+                <div class="net-node-title-group">
+                    <div class="net-node-icon">
+                        <i data-lucide="${iconName}"></i>
+                    </div>
+                    <div>
+                        <div class="net-node-name">${node.name}</div>
+                        <div class="net-node-host">${node.host}</div>
+                    </div>
+                </div>
+                <div class="net-node-badges">
+                    ${typeBadges[node.type] || ''}
+                    <span class="status-badge" style="${badgeStyles[status]}">${statusLabels[status]}</span>
+                </div>
+            </div>
+
+            <div class="net-ping-stats">
+                <div class="net-stat-box">
+                    <span class="net-stat-label">Latencia Ping (RTT)</span>
+                    <div class="net-stat-value">
+                        ${avgMs} <span class="net-stat-unit">ms</span>
+                    </div>
+                    <div class="net-stat-sub">Jitter: ${jitterMs}</div>
+                </div>
+
+                <div class="net-stat-box">
+                    <span class="net-stat-label">Pérdida de Paquetes</span>
+                    <div class="net-stat-value" style="color: ${parseFloat(lossPct) > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}">
+                        ${lossPct} <span class="net-stat-unit">%</span>
+                    </div>
+                    <div class="net-stat-sub">Mín: ${minMs} | Máx: ${maxMs} ms</div>
+                </div>
+            </div>
+
+            <div class="net-trace-section">
+                <button type="button" class="net-trace-toggle-btn" onclick="toggleTraceroute('${uniqueId}', this)">
+                    <span><i data-lucide="git-commit" style="width: 14px; height: 14px; vertical-align: middle;"></i> Ruta Traceroute (${trace.hops_count || hops.length} saltos)</span>
+                    <i data-lucide="chevron-down" style="width: 14px; height: 14px;"></i>
+                </button>
+                <div class="net-trace-hops-list" id="${uniqueId}">
+                    ${hopsHtml}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Toggle Traceroute accordion in network card
+function toggleTraceroute(id, btn) {
+    const list = document.getElementById(id);
+    if (!list) return;
+    const isExpanded = list.classList.toggle('expanded');
+    const chevron = btn.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
+    if (chevron) {
+        chevron.setAttribute('data-lucide', isExpanded ? 'chevron-up' : 'chevron-down');
+        initLucideIcons();
+    }
+}
+
+// Trigger network diagnostic execution via API
+async function runNetworkDiagnostic() {
+    const btn = document.getElementById('btnRunNetDiag');
+    if (!btn) return;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader-2" class="spin"></i> Ejecutando...`;
+    initLucideIcons();
+
+    try {
+        const locFilter = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
+        const res = await fetch('/api/net-diag/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                location: (locFilter && locFilter !== 'all') ? locFilter : undefined
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            await fetchNetDiag();
+        } else {
+            alert('Error al ejecutar el diagnóstico de red: ' + (data.error || 'Desconocido'));
+        }
+    } catch (err) {
+        console.error('Error running net-diag:', err);
+        alert('Error al conectar con el servidor para diagnóstico de red.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        initLucideIcons();
     }
 }
 
@@ -875,6 +1084,24 @@ const HELP_TOPICS = {
         ],
         troubleshooting: 'Usa la columna "IP Resuelta" para comprobar si la sede está resolviendo hacia el mismo balanceador o hacia un nodo de CDN diferente.',
         recommendation: 'Puedes exportar toda la tabla filtrada a formato CSV para entregar evidencia formal a proveedores o auditorías de TI.',
+        guideTab: 'tab-troubleshoot'
+    },
+    'net-diag': {
+        title: 'Diagnóstico de Infraestructura de Red',
+        subtitle: 'Auditoría ICMP Ping y Traceroute Multi-Salto',
+        badgeClass: 'badge-blue',
+        badgeText: 'Capa 3 (Red)',
+        icon: 'network',
+        layer: 'Capa de Red / Enrutamiento (ICMP & IP TTL)',
+        mechanism: 'Ping ICMP (Echo Request/Reply) + Traceroute Hop-by-Hop (MTR / Tracert)',
+        description: 'Evalúa la conectividad física y de enrutamiento hacia tres elementos vitales de la red: la Puerta de Enlace Predeterminada (Gateway LAN local), los servidores DNS asignados (resolutores primario y secundario) y las direcciones IP o hosts adicionales configurados. Permite aislar si una degradación de latencia ocurre dentro de la LAN de la sede, en el enlace del proveedor de internet (ISP) o en el datacenter de Manhattan.',
+        benchmarks: [
+            { label: 'Gateway Local', range: '< 5 ms (0% pérdida)', type: 'good', desc: 'Conexión switch/router LAN saludable. Tiempos >10ms sugieren congestión Wi-Fi o switch saturado.' },
+            { label: 'DNS Primario', range: '< 25 ms (0% pérdida)', type: 'good', desc: 'Resolutor DNS ágil. Si hay pérdida de paquetes, las consultas fallarán o aumentarán la Fase 1.' },
+            { label: 'Destinos WAN', range: '< 80 ms (0% pérdida)', type: 'good', desc: 'Ruta WAN estable sin cuellos de botella en los saltos intermedios del ISP.' }
+        ],
+        troubleshooting: 'Si la latencia hacia el Gateway es alta o presenta pérdida de paquetes, el problema es 100% de la red local de la sede (cableado, switch, Wi-Fi o router local). Si el Gateway responde en <3ms pero un host WAN tiene alta latencia o pérdida en el salto 4 o 5, el problema reside en el ISP o en el enlace troncal.',
+        recommendation: 'Haz clic en "Ruta Traceroute" en cada tarjeta para desplegar el desglose salto por salto y ver exactamente qué router introduce latencia o pérdida de paquetes.',
         guideTab: 'tab-troubleshoot'
     }
 };
