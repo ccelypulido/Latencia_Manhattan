@@ -16,70 +16,71 @@
 </head>
 <body>
     <div class="app-wrapper">
-        <!-- Top Navbar / Header -->
+        <!-- Top Navbar / Header (2-Tier Design) -->
         <header class="navbar">
-            <div class="brand">
-                <div class="logo-icon">
-                    <i data-lucide="activity"></i>
+            <!-- Row 1: Brand & Global System Actions -->
+            <div class="navbar-main">
+                <div class="brand">
+                    <div class="logo-icon">
+                        <i data-lucide="activity"></i>
+                    </div>
+                    <div class="brand-text">
+                        <h1>Manhattan Latency Analyzer</h1>
+                        <span class="sub-title">Monitoreo de conectividad, DNS y tiempo de servidor por Sedes</span>
+                    </div>
                 </div>
-                <div class="brand-text">
-                    <h1>Manhattan Latency Analyzer</h1>
-                    <span class="sub-title">Monitoreo de conectividad, DNS y tiempo de servidor por Sedes</span>
+
+                <div class="header-actions">
+                    <div class="status-indicator" id="monitorStatus" title="Estado del monitoreo en segundo plano">
+                        <span class="status-dot pulsing"></span>
+                        <span class="status-label">Monitoreando</span>
+                    </div>
+                    <button id="btnProbeNow" class="btn btn-primary" title="Ejecutar prueba de latencia inmediata">
+                        <i data-lucide="zap"></i> Probar Ahora
+                    </button>
+                    <button id="btnOpenHelp" class="btn btn-secondary" title="Sustento Técnico y Guía de Diagnóstico de Red">
+                        <i data-lucide="book-open"></i> Guía & Ayuda
+                    </button>
+                    <button id="btnOpenConfig" class="btn btn-secondary" title="Configurar parámetros y Sede">
+                        <i data-lucide="settings"></i> Configuración
+                    </button>
+                    <button id="btnExport" class="btn btn-outline" title="Descargar histórico en CSV">
+                        <i data-lucide="download"></i> Exportar
+                    </button>
                 </div>
             </div>
 
-            <div class="header-status-panel">
-                <!-- Location Tag Badge -->
-                <div class="location-badge" title="Sede / Ubicación actual configurada">
-                    <i data-lucide="map-pin"></i>
-                    <span id="currentLocationBadge">Sede Principal</span>
+            <!-- Row 2: Context Metadata Strip & Location View Filter -->
+            <div class="navbar-sub">
+                <div class="navbar-context-tags">
+                    <div class="meta-item" title="Sede / Ubicación configurada en este equipo">
+                        <span class="meta-label"><i data-lucide="map-pin"></i> Sede Actual:</span>
+                        <div class="location-badge">
+                            <span id="currentLocationBadge">Sede Principal</span>
+                        </div>
+                    </div>
+                    <div class="meta-item" title="URL bajo monitoreo continuo">
+                        <span class="meta-label"><i data-lucide="globe"></i> Endpoint Destino:</span>
+                        <div class="url-badge">
+                            <span id="targetUrlBadge">https://alkop.sce.manh.com/ping</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="url-badge" title="URL bajo monitoreo">
-                    <i data-lucide="globe"></i>
-                    <span id="targetUrlBadge">https://alkop.sce.manh.com/ping</span>
-                </div>
-                <div class="status-indicator" id="monitorStatus">
-                    <span class="status-dot pulsing"></span>
-                    <span class="status-label">Monitoreando</span>
-                </div>
-            </div>
 
-            <div class="header-actions">
-                <button id="btnProbeNow" class="btn btn-primary" title="Ejecutar prueba de latencia inmediata">
-                    <i data-lucide="zap"></i> Probar Ahora
-                </button>
-                <button id="btnOpenHelp" class="btn btn-secondary" title="Sustento Técnico y Guía de Diagnóstico de Red">
-                    <i data-lucide="book-open"></i> Guía & Ayuda
-                </button>
-                <button id="btnOpenConfig" class="btn btn-secondary" title="Configurar parámetros y Sede">
-                    <i data-lucide="settings"></i> Configuración
-                </button>
-                <button id="btnExport" class="btn btn-outline" title="Descargar histórico en CSV">
-                    <i data-lucide="download"></i> Exportar
-                </button>
+                <div class="navbar-filter-group">
+                    <label for="filterLocationSelect"><i data-lucide="filter"></i> Filtrar Vista por Sede:</label>
+                    <button class="component-help-btn" data-topic="locations" title="Ayuda técnica sobre aislamiento y filtro por Sedes">
+                        <i data-lucide="help-circle"></i>
+                    </button>
+                    <select id="filterLocationSelect" class="form-select font-bold">
+                        <option value="all">Todas las Sedes</option>
+                    </select>
+                </div>
             </div>
         </header>
 
         <!-- Main Content Area -->
         <main class="main-container">
-
-            <!-- Global Location Filter Toolbar -->
-            <section class="toolbar-panel glow-card">
-                <div class="toolbar-content">
-                    <div class="toolbar-group">
-                        <label for="filterLocationSelect"><i data-lucide="map-pin"></i> Filtrar por Sede / Ubicación:</label>
-                        <button class="component-help-btn" data-topic="locations" title="Ayuda sobre aislamiento y filtro por Sedes">
-                            <i data-lucide="help-circle"></i>
-                        </button>
-                        <select id="filterLocationSelect" class="form-select font-bold">
-                            <option value="all">Todas las Sedes</option>
-                        </select>
-                    </div>
-                    <div class="toolbar-info text-muted">
-                        <span>Los resultados, promedios y gráficos responderán al filtro seleccionado.</span>
-                    </div>
-                </div>
-            </section>
 
             <!-- Metrics Summary Cards -->
             <section class="metrics-grid">
