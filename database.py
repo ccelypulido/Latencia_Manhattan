@@ -71,7 +71,8 @@ def init_db():
             "auth_user": "",
             "auth_password": "",
             "auth_token": "",
-            "extra_ping_targets": ""
+            "extra_ping_targets": "",
+            "net_diag_interval_minutes": "15"
         }
         for k, v in defaults.items():
             cursor.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
@@ -585,7 +586,7 @@ def build_report_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
         "priority": "Informativa",
         "priority_class": "badge-blue",
         "category": "Línea Base Operativa",
-        "text": "Continuar con el monitoreo automático periódico cada 10 segundos y el diagnóstico ICMP cada 15 minutos para preservar la trazabilidad histórica ante auditorías de SLAs."
+        "text": "Continuar con el monitoreo automático periódico de HTTP y los diagnósticos ICMP programados para preservar la trazabilidad histórica ante auditorías de SLAs."
     })
 
     return {

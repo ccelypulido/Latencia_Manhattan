@@ -50,13 +50,21 @@ def background_probe_loop():
                 result = probe.measure_latency(target_url, timeout=timeout, auth_config=cfg)
                 database.save_record(result, location=location_name)
 
-            # Scheduled 15-minute Network Diagnostic (900 seconds)
+            # Scheduled ICMP Network Diagnostic (Configurable interval in minutes, default 15 min)
             now_ts = time.time()
-            if auto_enabled and (now_ts - last_net_diag_time >= 900):
+            try:
+                diag_interval_min = float(cfg.get("net_diag_interval_minutes", "15"))
+                if diag_interval_min <= 0:
+                    diag_interval_min = 15.0
+            except (ValueError, TypeError):
+                diag_interval_min = 15.0
+            diag_interval_secs = diag_interval_min * 60.0
+
+            if auto_enabled and (now_ts - last_net_diag_time >= diag_interval_secs):
                 last_net_diag_time = now_ts
                 try:
                     extra_targets = cfg.get("extra_ping_targets", "")
-                    print(f"[INFO] Running scheduled 15-min network diagnostic for '{location_name}'...")
+                    print(f"[INFO] Running scheduled network diagnostic (every {diag_interval_min:g} min) for '{location_name}'...")
                     net_results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets)
                     saved_id = database.save_net_diag_run(net_results, location=location_name)
                     print(f"[INFO] Scheduled network diagnostic saved (ID #{saved_id}, {len(net_results)} targets).")

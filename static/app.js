@@ -304,10 +304,21 @@ async function loadConfig() {
 
         document.getElementById('tokenGroup').style.display = ((cfg.auth_type || 'ntlm') === 'bearer') ? 'block' : 'none';
 
-        // Extra ping targets
+        // Extra ping targets & ICMP diagnostic frequency
         const extraTargetsEl = document.getElementById('cfgExtraTargets');
         if (extraTargetsEl) {
             extraTargetsEl.value = cfg.extra_ping_targets || '';
+        }
+
+        const netDiagIntervalEl = document.getElementById('cfgNetDiagInterval');
+        const netDiagMinutes = cfg.net_diag_interval_minutes || '15';
+        if (netDiagIntervalEl) {
+            netDiagIntervalEl.value = netDiagMinutes;
+        }
+
+        const netDiagSubtitleEl = document.getElementById('netDiagSubtitle');
+        if (netDiagSubtitleEl) {
+            netDiagSubtitleEl.textContent = `Análisis de latencia ICMP, pérdida de paquetes, jitter y saltos de enrutamiento (Automático cada ${netDiagMinutes} min o manual con Play)`;
         }
 
         updateAutoProbeUI(cfg.auto_probe_enabled === '1');
@@ -331,6 +342,7 @@ async function saveConfig() {
     const authPassword = document.getElementById('cfgAuthPassword').value;
     const authToken = document.getElementById('cfgAuthToken').value.trim();
     const extraTargets = document.getElementById('cfgExtraTargets') ? document.getElementById('cfgExtraTargets').value.trim() : '';
+    const netDiagInterval = document.getElementById('cfgNetDiagInterval') ? document.getElementById('cfgNetDiagInterval').value.trim() : '15';
 
     if (!targetUrl) {
         alert('Por favor ingrese una URL válida.');
@@ -353,7 +365,8 @@ async function saveConfig() {
                 auth_user: authUser,
                 auth_password: authPassword,
                 auth_token: authToken,
-                extra_ping_targets: extraTargets
+                extra_ping_targets: extraTargets,
+                net_diag_interval_minutes: netDiagInterval || '15'
             })
         });
 

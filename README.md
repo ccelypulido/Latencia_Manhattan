@@ -154,11 +154,14 @@ Para aislar si una degradación de latencia se origina dentro de la red local de
    - Detecta automáticamente los servidores DNS asignados a la interfaz de red (vía `resolvectl`, `/etc/resolv.conf` o PowerShell).
    - Evalúa la latencia y estabilidad del resolver para verificar si los cuellos de botella en la Fase 1 (Resolución DNS) provienen del Active Directory / DNS local.
 
-3. **Nodos e IPs Adicionales Configurables:**
+3. **Frecuencia Programada Configurable:**
+   - En el menú `⚙️ Configuración`, el campo **"Frecuencia de Diagnóstico de Red ICMP (minutos)"** permite ajustar el intervalo de ejecución automática en segundo plano (por defecto: **15 minutos**, ajustable según necesidad operativa entre 1 y 1440 minutos).
+
+4. **Nodos e IPs Adicionales Configurables:**
    - En el menú `⚙️ Configuración`, en el campo **"IPs / Hosts Adicionales para Diagnóstico de Red"**, puedes registrar IPs públicas, enlaces dedicados o routers secundarios separados por coma (ej. `8.8.8.8, 1.1.1.1, 10.0.0.50`).
    - El sistema ejecuta pruebas concurrentes en hilos independientes sin bloquear la medición periódica de Manhattan.
 
-4. **Traceroute Salto por Salto (Hop-by-Hop):**
+5. **Traceroute Salto por Salto (Hop-by-Hop):**
    - Rastrea la cadena completa de enrutamiento con utilidades del sistema (`mtr`, `tracepath`, `traceroute` en Linux; `tracert` en Windows).
    - Cada tarjeta en el dashboard incluye un acordeón desplegable **"Ruta Traceroute (X saltos)"** que muestra la IP de cada enrutador intermedio y su RTT milisegundo a milisegundo, localizando de inmediato el salto exacto donde se genera congestión WAN.
 
@@ -167,7 +170,7 @@ Para aislar si una degradación de latencia se origina dentro de la red local de
 ## ⏸️ Control General de Pruebas Automáticas (Botón Stop / Reanudar)
 
 En la barra de navegación superior se encuentra un botón de control en tiempo real:
-- **Estado Activo (Verde Pulsante):** Las pruebas periódicas HTTP (cada 10s) y el diagnóstico de red ICMP (cada 15 min) se ejecutan continuamente en segundo plano.
+- **Estado Activo (Verde Pulsante):** Las pruebas periódicas HTTP (cada 10s) y el diagnóstico de red ICMP (según la frecuencia configurada, por defecto cada 15 min) se ejecutan continuamente en segundo plano.
 - **Detención Inmediata (Clic en el botón):** Conmuta instantáneamente a `Pausado (Detenido)` (ámbar estático), suspendiendo las solicitudes automáticas sin cerrar el servidor ni alterar los datos almacenados.
 - **Reanudación:** Al volver a hacer clic, el monitoreo se reanuda de inmediato.
 
