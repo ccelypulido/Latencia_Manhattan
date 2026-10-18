@@ -81,7 +81,8 @@ def init_db():
             "auth_password": "",
             "auth_token": "",
             "extra_ping_targets": "",
-            "net_diag_interval_minutes": "15"
+            "excluded_ping_targets": "",
+            "net_diag_interval_minutes": "15" 
         }
         for k, v in defaults.items():
             cursor.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))

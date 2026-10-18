@@ -64,8 +64,9 @@ def background_probe_loop():
                 last_net_diag_time = now_ts
                 try:
                     extra_targets = cfg.get("extra_ping_targets", "")
+                    excluded_targets = cfg.get("excluded_ping_targets", "")
                     print(f"[INFO] Running scheduled network diagnostic (every {diag_interval_min:g} min) for '{location_name}'...")
-                    net_results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets)
+                    net_results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets, exclude_hosts_str=excluded_targets)
                     saved_id = database.save_net_diag_run(net_results, location=location_name)
                     print(f"[INFO] Scheduled network diagnostic saved (ID #{saved_id}, {len(net_results)} targets).")
                 except Exception as nd_err:
@@ -142,6 +143,14 @@ def generate_icmp_csv(runs: list) -> str:
             })
     return output.getvalue()
 
+class QuietThreadingHTTPServer(http.server.ThreadingHTTPServer):
+    """Threading HTTP server that suppresses client socket disconnect tracebacks (e.g. WinError 10053, BrokenPipe)."""
+    def handle_error(self, request, client_address):
+        exc_type, exc_val, _ = sys.exc_info()
+        if exc_type in (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            return
+        super().handle_error(request, client_address)
+
 class LatencyHandler(http.server.BaseHTTPRequestHandler):
     """HTTP Request Handler for Manhattan Latency Analyzer API and Static Web App."""
 
@@ -150,15 +159,18 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
         pass
 
     def send_json(self, data: Any, status: int = 200):
-        body = json.dumps(data).encode('utf-8')
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            body = json.dumps(data).encode('utf-8')
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            pass
 
     def send_file(self, filepath: str, content_type: str):
         if not os.path.exists(filepath):
@@ -166,11 +178,20 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             return
         with open(filepath, "rb") as f:
             content = f.read()
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(content)))
-        self.end_headers()
-        self.wfile.write(content)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            pass
+
+    def send_error(self, code: int, message: str = None, explain: str = None):
+        try:
+            super().send_error(code, message, explain)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            pass
 
     def do_HEAD(self):
         self.do_GET()
@@ -244,8 +265,8 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
                 run_data = database.get_latest_net_diag(location_filter=location_filter)
 
             runs_list = database.get_net_diag_runs_list(location_filter=location_filter, limit=50)
-            gw = net_diag.detect_default_gateway()
-            dns_list = net_diag.detect_dns_servers()
+            gw = net_diag.get_cached_gateway()
+            dns_list = net_diag.get_cached_dns_servers()
             cfg = database.get_config()
             return self.send_json({
                 "latest": run_data,
@@ -253,7 +274,8 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
                 "detected": {
                     "gateway": gw,
                     "dns_servers": dns_list,
-                    "extra_targets": cfg.get("extra_ping_targets", "")
+                    "extra_targets": cfg.get("extra_ping_targets", ""),
+                    "excluded_targets": cfg.get("excluded_ping_targets", "")
                 }
             })
 
@@ -360,7 +382,8 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             cfg = database.get_config()
             location_name = payload.get("location") or cfg.get("location_name", "Sede Principal")
             extra_targets = payload.get("extra_targets") if "extra_targets" in payload else cfg.get("extra_ping_targets", "")
-            results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets)
+            excluded_targets = cfg.get("excluded_ping_targets", "")
+            results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets, exclude_hosts_str=excluded_targets)
             saved_id = database.save_net_diag_run(results, location=location_name)
             return self.send_json({
                 "success": True,
@@ -401,7 +424,7 @@ def run():
     background_thread = threading.Thread(target=background_probe_loop, daemon=True)
     background_thread.start()
 
-    server = http.server.ThreadingHTTPServer((HOST, PORT), LatencyHandler)
+    server = QuietThreadingHTTPServer((HOST, PORT), LatencyHandler)
     print(f"\n=======================================================")
     print(f"🚀 Manhattan Latency Analyzer running at:")
     print(f"👉 Local: http://localhost:{PORT}")

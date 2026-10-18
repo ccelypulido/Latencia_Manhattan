@@ -569,6 +569,16 @@
                         El diagnóstico siempre incluye automáticamente el Gateway Predeterminado y los Servidores DNS activos del sistema. Ingresa aquí direcciones IP o nombres de host adicionales que desees auditar con Ping ICMP y Traceroute.
                     </small>
                 </div>
+
+                <div class="form-group">
+                    <label for="cfgExcludedTargets" class="font-bold flex items-center gap-2">
+                        <i data-lucide="shield-ban"></i> IPs / Nodos a Excluir del Diagnóstico:
+                    </label>
+                    <input type="text" id="cfgExcludedTargets" class="form-input" placeholder="Ej: 192.168.49.1, 10.0.0.99 (separados por coma)">
+                    <small class="form-hint text-muted" style="display:block; margin-top:0.35rem; font-size:0.75rem;">
+                        Permite omitir y eliminar de las pruebas ICMP cualquier IP o servidor DNS no deseado (como adaptadores virtuales Minikube, Docker o WSL, o DNS inactivos).
+                    </small>
+                </div>
             </div>
             <div class="modal-footer">
                 <button id="btnSaveConfig" class="btn btn-primary"><i data-lucide="save"></i> Guardar Cambios</button>

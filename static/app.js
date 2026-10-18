@@ -310,6 +310,11 @@ async function loadConfig() {
             extraTargetsEl.value = cfg.extra_ping_targets || '';
         }
 
+        const excludedTargetsEl = document.getElementById('cfgExcludedTargets');
+        if (excludedTargetsEl) {
+            excludedTargetsEl.value = cfg.excluded_ping_targets || '';
+        }
+
         const netDiagIntervalEl = document.getElementById('cfgNetDiagInterval');
         const netDiagMinutes = cfg.net_diag_interval_minutes || '15';
         if (netDiagIntervalEl) {
@@ -342,6 +347,7 @@ async function saveConfig() {
     const authPassword = document.getElementById('cfgAuthPassword').value;
     const authToken = document.getElementById('cfgAuthToken').value.trim();
     const extraTargets = document.getElementById('cfgExtraTargets') ? document.getElementById('cfgExtraTargets').value.trim() : '';
+    const excludedTargets = document.getElementById('cfgExcludedTargets') ? document.getElementById('cfgExcludedTargets').value.trim() : '';
     const netDiagInterval = document.getElementById('cfgNetDiagInterval') ? document.getElementById('cfgNetDiagInterval').value.trim() : '15';
 
     if (!targetUrl) {
@@ -366,6 +372,7 @@ async function saveConfig() {
                 auth_password: authPassword,
                 auth_token: authToken,
                 extra_ping_targets: extraTargets,
+                excluded_ping_targets: excludedTargets,
                 net_diag_interval_minutes: netDiagInterval || '15'
             })
         });
@@ -588,7 +595,11 @@ async function fetchNetDiag(targetRunId = null) {
             lastRunEl.textContent = `${isHistorical ? `Prueba #${latest.id}:` : 'Última prueba:'} ${timeStr}${locStr}`;
         }
 
-        container.innerHTML = latest.results.map(node => renderNetDiagCard(node)).join('');
+        const excludedStr = (data.detected && data.detected.excluded_targets) ? data.detected.excluded_targets : '';
+        const excludedList = excludedStr.split(/[,;\s\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+        const visibleResults = latest.results.filter(node => !excludedList.includes(node.host.toLowerCase()));
+
+        container.innerHTML = visibleResults.map(node => renderNetDiagCard(node)).join('');
         initLucideIcons();
     } catch (err) {
         console.error('Error fetching net-diag:', err);
@@ -665,6 +676,11 @@ function renderNetDiagCard(node) {
                 <div class="net-node-badges">
                     ${typeBadges[node.type] || ''}
                     <span class="status-badge" style="${badgeStyles[status]}">${statusLabels[status]}</span>
+                    ${node.type !== 'gateway' ? `
+                        <button type="button" class="btn-node-exclude" onclick="excludeNetNode('${node.host}', '${node.name}')" title="Excluir este nodo de las pruebas ICMP">
+                            <i data-lucide="shield-ban" style="width: 13px; height: 13px;"></i>
+                        </button>
+                    ` : ''}
                 </div>
             </div>
 
@@ -1970,4 +1986,31 @@ function renderReport(data) {
     `;
 
     initLucideIcons();
+}
+
+// Exclude a network node from ICMP tests
+async function excludeNetNode(host, name) {
+    if (!confirm(`¿Deseas excluir '${name}' (${host}) de las pruebas de diagnóstico de red?`)) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        let currentExcluded = cfg.excluded_ping_targets || '';
+        let list = currentExcluded.split(/[,;\s\n]+/).map(s => s.trim()).filter(Boolean);
+        if (!list.includes(host)) {
+            list.push(host);
+        }
+        cfg.excluded_ping_targets = list.join(', ');
+        
+        await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cfg)
+        });
+        
+        await fetchNetDiag();
+    } catch (err) {
+        alert('Error al excluir el nodo: ' + err);
+    }
 }

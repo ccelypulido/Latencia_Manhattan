@@ -2180,3 +2180,24 @@ button.status-toggle-btn:hover .btn-inline-icon {
         color: #1e293b !important;
     }
 }
+
+/* Exclude Node Button in Net Diag Cards */
+.btn-node-exclude {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    padding: 0.15rem 0.35rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    margin-left: 0.25rem;
+}
+
+.btn-node-exclude:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: var(--accent-rose);
+}

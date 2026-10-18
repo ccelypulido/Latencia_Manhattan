@@ -6,8 +6,32 @@ import struct
 import platform
 import subprocess
 import locale
+import time
 import concurrent.futures
 from typing import Dict, Any, List, Optional
+
+_cached_gateway: Optional[str] = None
+_cached_gateway_time: float = 0.0
+_cached_dns: Optional[List[str]] = None
+_cached_dns_time: float = 0.0
+
+def get_cached_gateway(max_age_sec: float = 60.0) -> Optional[str]:
+    """Returns cached default gateway to avoid running slow OS commands on every HTTP polling request."""
+    global _cached_gateway, _cached_gateway_time
+    now = time.time()
+    if _cached_gateway is None or (now - _cached_gateway_time) > max_age_sec:
+        _cached_gateway = detect_default_gateway()
+        _cached_gateway_time = now
+    return _cached_gateway
+
+def get_cached_dns_servers(max_age_sec: float = 60.0) -> List[str]:
+    """Returns cached DNS servers list to avoid running slow OS commands on every HTTP polling request."""
+    global _cached_dns, _cached_dns_time
+    now = time.time()
+    if _cached_dns is None or (now - _cached_dns_time) > max_age_sec:
+        _cached_dns = detect_dns_servers()
+        _cached_dns_time = now
+    return list(_cached_dns)
 
 def safe_decode(b: bytes) -> str:
     """Safely decodes binary subprocess output supporting CP850/CP1252 (Windows) and UTF-8 without raising UnicodeDecodeError."""
@@ -100,8 +124,38 @@ def detect_default_gateway() -> Optional[str]:
 
     return None
 
+def _parse_windows_ipconfig_dns(stdout: str) -> List[str]:
+    """Parses ipconfig /all output and returns DNS servers only for adapters that have an active default gateway."""
+    adapters = re.split(r"(?:\r?\n){2,}(?=[^\s])", stdout)
+    dns_found = []
+
+    for block in adapters:
+        # Check if this adapter has a valid default gateway
+        gw_match = re.search(r"(?:Default Gateway|Puerta de enlace predeterminada)[^:]*:\s*([0-9.]+)", block, re.IGNORECASE)
+        if not gw_match:
+            continue
+        gw_ip = gw_match.group(1).strip()
+        if gw_ip.startswith("0.") or gw_ip.startswith("127.") or gw_ip.startswith("169.254."):
+            continue
+
+        # This adapter has an active gateway! Extract its DNS servers
+        dns_section = re.search(r"(?:DNS Servers|Servidores DNS)[^:]*:\s*([0-9.]+)([\s\S]*?)(?:\r?\n\s*[A-Za-záéíóúÁÉÍÓÚ]|\Z)", block, re.IGNORECASE)
+        if dns_section:
+            first_ip = dns_section.group(1).strip()
+            if first_ip and not first_ip.startswith("127.") and not first_ip.startswith("169.254.") and not first_ip.startswith("0."):
+                if first_ip not in dns_found:
+                    dns_found.append(first_ip)
+            subsequent = dns_section.group(2)
+            for m in re.finditer(r"^\s*([0-9.]+)", subsequent, re.MULTILINE):
+                ip = m.group(1).strip()
+                if ip and not ip.startswith("127.") and not ip.startswith("169.254.") and not ip.startswith("0."):
+                    if ip not in dns_found:
+                        dns_found.append(ip)
+
+    return dns_found
+
 def detect_dns_servers() -> List[str]:
-    """Detects configured DNS servers in Linux or Windows."""
+    """Detects configured DNS servers in Linux or Windows, strictly filtering out inactive and virtual adapters."""
     system = platform.system().lower()
     servers = []
 
@@ -112,7 +166,7 @@ def detect_dns_servers() -> List[str]:
             for line in stdout.splitlines():
                 matches = re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", line)
                 for ip in matches:
-                    if ip not in servers and not ip.startswith("127."):
+                    if ip not in servers and not ip.startswith("127.") and not ip.startswith("169.254.") and not ip.startswith("0."):
                         servers.append(ip)
         except Exception:
             pass
@@ -126,21 +180,46 @@ def detect_dns_servers() -> List[str]:
                         parts = line.split()
                         if len(parts) >= 2:
                             ip = parts[1]
-                            if ip not in servers:
+                            if ip not in servers and not ip.startswith("127.") and not ip.startswith("169.254.") and not ip.startswith("0."):
                                 servers.append(ip)
         except Exception:
             pass
 
     elif system == "windows":
+        # 1. Native C binary ipconfig /all (runs in 15ms and isolates active gateway adapter from virtual switches)
         try:
-            ps_cmd = "(Get-DnsClientServerAddress -AddressFamily IPv4).ServerAddresses"
-            ret, stdout, stderr = run_cmd_safe(["powershell", "-NoProfile", "-Command", ps_cmd], timeout=4.0)
-            for line in stdout.splitlines():
-                ip = line.strip()
-                if re.match(r"^[0-9.]+$", ip) and ip not in servers:
-                    servers.append(ip)
+            ret, stdout, stderr = run_cmd_safe(["ipconfig", "/all"], timeout=4.0)
+            if ret == 0 and stdout:
+                parsed_dns = _parse_windows_ipconfig_dns(stdout)
+                for ip in parsed_dns:
+                    if ip not in servers:
+                        servers.append(ip)
         except Exception:
             pass
+
+        # 2. Fallback: PowerShell targeting ONLY adapter with active IPv4 Default Gateway (ignoring virtual switches)
+        if not servers:
+            try:
+                ps_cmd = "(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null -and $_.NetAdapter.Virtual -ne $true }).DNSServer.ServerAddresses"
+                ret, stdout, stderr = run_cmd_safe(["powershell", "-NoProfile", "-Command", ps_cmd], timeout=4.0)
+                for line in stdout.splitlines():
+                    ip = line.strip()
+                    if re.match(r"^[0-9.]+$", ip) and not ip.startswith("127.") and not ip.startswith("169.254.") and not ip.startswith("0.") and ip not in servers:
+                        servers.append(ip)
+            except Exception:
+                pass
+
+        # 3. Last fallback: any Up physical adapter
+        if not servers:
+            try:
+                ps_cmd = "(Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -ne $true } | Get-DnsClientServerAddress -AddressFamily IPv4).ServerAddresses"
+                ret, stdout, stderr = run_cmd_safe(["powershell", "-NoProfile", "-Command", ps_cmd], timeout=4.0)
+                for line in stdout.splitlines():
+                    ip = line.strip()
+                    if re.match(r"^[0-9.]+$", ip) and not ip.startswith("127.") and not ip.startswith("169.254.") and not ip.startswith("0.") and ip not in servers:
+                        servers.append(ip)
+            except Exception:
+                pass
 
     clean_servers = []
     for s in servers:
@@ -435,14 +514,29 @@ def diagnose_single_target(target_info: Dict[str, str]) -> Dict[str, Any]:
         "traceroute": trace_res
     }
 
-def run_full_network_diagnostic(extra_hosts_str: str = "") -> List[Dict[str, Any]]:
-    """Runs full network diagnostics concurrently for Gateway, DNS servers, and extra targets."""
+def run_full_network_diagnostic(extra_hosts_str: str = "", exclude_hosts_str: str = "") -> List[Dict[str, Any]]:
+    """Runs full network diagnostics concurrently for Gateway, DNS servers, and extra targets, honoring exclusion list."""
+    global _cached_gateway, _cached_gateway_time, _cached_dns, _cached_dns_time
+    _cached_gateway = detect_default_gateway()
+    _cached_gateway_time = time.time()
+    _cached_dns = detect_dns_servers()
+    _cached_dns_time = time.time()
+
+    gw = _cached_gateway
+    dns_list = list(_cached_dns)
+
+    # Build exclusion set
+    excluded_set = set()
+    if exclude_hosts_str:
+        for item in re.split(r"[,;\s\n]+", exclude_hosts_str.strip()):
+            item = item.strip()
+            if item:
+                excluded_set.add(item.lower())
+
     targets_to_test = []
 
     # 1. Default Gateway
-    gw = detect_default_gateway()
-    dns_list = detect_dns_servers()
-    if gw:
+    if gw and gw.lower() not in excluded_set:
         gw_label = f"Puerta de Enlace ({gw})"
         if gw in dns_list:
             gw_label = f"Gateway & DNS Local ({gw})"
@@ -457,6 +551,8 @@ def run_full_network_diagnostic(extra_hosts_str: str = "") -> List[Dict[str, Any
     for dns_ip in dns_list:
         if gw and dns_ip == gw:
             continue
+        if dns_ip.lower() in excluded_set:
+            continue
         dns_count += 1
         targets_to_test.append({
             "host": dns_ip,
@@ -467,23 +563,25 @@ def run_full_network_diagnostic(extra_hosts_str: str = "") -> List[Dict[str, Any
     # 3. Extra targets configured by user
     if extra_hosts_str:
         raw_items = re.split(r"[,;\s\n]+", extra_hosts_str.strip())
-        existing_hosts = [t["host"] for t in targets_to_test]
+        existing_hosts = [t["host"].lower() for t in targets_to_test]
         for item in raw_items:
             item = item.strip()
-            if item and item not in existing_hosts:
+            if item and item.lower() not in existing_hosts and item.lower() not in excluded_set:
                 targets_to_test.append({
                     "host": item,
                     "name": f"Nodo Adicional ({item})",
                     "type": "extra"
                 })
-                existing_hosts.append(item)
+                existing_hosts.append(item.lower())
 
     if not targets_to_test:
-        targets_to_test.append({
-            "host": "8.8.8.8",
-            "name": "DNS Público (8.8.8.8)",
-            "type": "dns"
-        })
+        fallback_ip = "8.8.8.8"
+        if fallback_ip.lower() not in excluded_set:
+            targets_to_test.append({
+                "host": fallback_ip,
+                "name": "DNS Público (8.8.8.8)",
+                "type": "dns"
+            })
 
     results = []
     max_w = max(1, min(6, len(targets_to_test)))
