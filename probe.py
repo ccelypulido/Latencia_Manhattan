@@ -109,6 +109,8 @@ def measure_latency(url: str, timeout: float = 10.0, auth_config: Optional[Dict[
         password = auth_config.get('auth_password', '')
         token = auth_config.get('auth_token', '')
 
+    sock = None
+    ssl_sock = None
     t0 = time.perf_counter()
     try:
         # 1. DNS Resolution
@@ -273,6 +275,17 @@ def measure_latency(url: str, timeout: float = 10.0, auth_config: Optional[Dict[
         res['total_ms'] = round((time.perf_counter() - t0) * 1000, 2)
         res['connect_ms'] = round(res.get('tcp_ms', 0.0) + res.get('tls_ms', 0.0), 2)
         res['cold_total_ms'] = res['total_ms']
+    finally:
+        if ssl_sock:
+            try:
+                ssl_sock.close()
+            except Exception:
+                pass
+        elif sock:
+            try:
+                sock.close()
+            except Exception:
+                pass
 
     return res
 

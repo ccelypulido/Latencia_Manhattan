@@ -150,6 +150,8 @@ def generate_icmp_csv(runs: list) -> str:
 
 class QuietThreadingHTTPServer(http.server.ThreadingHTTPServer):
     """Threading HTTP server that suppresses client socket disconnect tracebacks (e.g. WinError 10053, BrokenPipe)."""
+    daemon_threads = True
+
     def handle_error(self, request, client_address):
         exc_type, exc_val, _ = sys.exc_info()
         if exc_type in (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):

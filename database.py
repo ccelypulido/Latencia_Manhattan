@@ -2,19 +2,35 @@ import sqlite3
 import datetime
 import math
 import json
+import contextlib
 from typing import Dict, Any, List, Optional
 
 DB_FILE = "latency_history.db"
 
+@contextlib.contextmanager
 def get_connection():
-    conn = sqlite3.connect(DB_FILE)
+    """Thread-safe context manager that guarantees closing SQLite connection and releasing OS file descriptors."""
+    conn = sqlite3.connect(DB_FILE, timeout=30.0)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
 
 def init_db():
     """Initializes SQLite tables and performs migrations if needed."""
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

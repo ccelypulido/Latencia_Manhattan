@@ -316,22 +316,44 @@ function updateAutoProbeUI(isEnabled) {
 // Toggle Auto-probe execution
 async function toggleAutoProbe() {
     const btnToggle = document.getElementById('btnToggleAuto');
-    if (btnToggle) btnToggle.style.pointerEvents = 'none';
+    if (btnToggle) {
+        btnToggle.style.pointerEvents = 'none';
+        btnToggle.style.opacity = '0.65';
+    }
 
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
         const res = await fetch('/api/auto-probe/toggle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
+            body: JSON.stringify({}),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+
         const data = await res.json();
         if (data && data.success) {
             updateAutoProbeUI(data.auto_probe_enabled);
+        } else {
+            throw new Error((data && data.error) || 'Respuesta inesperada del servidor');
         }
     } catch (err) {
         console.error('Error al conmutar monitoreo automático:', err);
+        const errorMsg = (err.name === 'AbortError')
+            ? 'El servidor no respondió a tiempo (timeout de 8s).'
+            : err.message;
+        alert(`⚠️ No se pudo conmutar el estado del monitoreo automático:\n${errorMsg}`);
     } finally {
-        if (btnToggle) btnToggle.style.pointerEvents = 'auto';
+        if (btnToggle) {
+            btnToggle.style.pointerEvents = 'auto';
+            btnToggle.style.opacity = '1';
+        }
     }
 }
 
