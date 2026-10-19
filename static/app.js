@@ -485,6 +485,10 @@ async function fetchZones() {
             url += `?location=${encodeURIComponent(filterLoc)}`;
         }
         const res = await fetch(url);
+        if (!res.ok) {
+            console.warn('API /api/zones devolvió status:', res.status);
+            return;
+        }
         const data = await res.json();
 
         currentZone = data.current_zone || '';
@@ -559,6 +563,13 @@ async function changeActiveZone(newZone) {
                 location: curLoc
             })
         });
+        if (!res.ok) {
+            if (res.status === 404) {
+                alert('El servidor debe ser reiniciado para activar las zonas.\n\nPor favor presiona Ctrl+C en la consola donde corre la aplicación y vuelve a ejecutar: python app.py');
+                return;
+            }
+            throw new Error(`HTTP ${res.status}`);
+        }
         const data = await res.json();
         if (data.success) {
             currentZone = data.current_zone;
@@ -567,14 +578,14 @@ async function changeActiveZone(newZone) {
         }
     } catch (err) {
         console.error('Error changing active zone:', err);
+        alert('Error al cambiar zona: ' + err.message);
     }
 }
 
 // Quick add zone for the current location
 async function quickAddZone() {
     const curLoc = document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Sede Principal';
-    const zoneName = prompt(`Ingresa el nombre de la nueva zona para el recorrido en "${curLoc}"
-(ej: Rack:1-2, Rack:3-4, Muelles:1-2, Mezanine, Bunker):`);
+    const zoneName = prompt(`Ingresa el nombre de la nueva zona para el recorrido en "${curLoc}"\n(ej: Rack:1-2, Rack:3-4, Muelles:1-2, Mezanine, Bunker):`);
     if (!zoneName || !zoneName.trim()) return;
 
     try {
@@ -588,13 +599,25 @@ async function quickAddZone() {
                 set_active: true
             })
         });
+        if (!res.ok) {
+            if (res.status === 404) {
+                alert('El servidor debe ser reiniciado para activar las rutas de zonas.\n\nPor favor presiona Ctrl+C en la terminal donde corre la aplicación y vuelve a ejecutar:\npython app.py (en Windows) o python3 app.py (en Linux)');
+                return;
+            }
+            let errDetail = `HTTP ${res.status}`;
+            try {
+                const errData = await res.json();
+                if (errData && errData.error) errDetail = errData.error;
+            } catch (e) {}
+            throw new Error(errDetail);
+        }
         const data = await res.json();
         if (data.success) {
             await fetchZones();
             refreshAllData();
         }
     } catch (err) {
-        alert('Error al agregar nueva zona: ' + err);
+        alert('Error al agregar nueva zona: ' + err.message);
     }
 }
 

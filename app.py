@@ -194,6 +194,9 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
 
     def send_error(self, code: int, message: str = None, explain: str = None):
         try:
+            if hasattr(self, 'path') and self.path.startswith('/api/'):
+                self.send_json({"success": False, "error": message or f"Error HTTP {code}", "status": code}, status=code)
+                return
             super().send_error(code, message, explain)
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
             pass
