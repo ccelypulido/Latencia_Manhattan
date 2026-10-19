@@ -412,6 +412,8 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/config":
             for k, v in payload.items():
+                if k == "current_zone" and isinstance(v, str) and "," in v:
+                    v = v.split(",")[0].strip()
                 database.set_config_key(k, str(v) if not isinstance(v, (dict, list)) else json.dumps(v))
             return self.send_json({"success": True, "config": database.get_config()})
 
@@ -421,6 +423,11 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             
             if action == "set_current":
                 zone_val = (payload.get("zone") or "").strip()
+                if "," in zone_val:
+                    return self.send_json({
+                        "success": False,
+                        "error": "La zona activa actual debe ser una única zona individual."
+                    }, status=400)
                 database.set_config_key("current_zone", zone_val)
                 if zone_val:
                     database.add_zone_to_location(location_name, zone_val)
@@ -432,6 +439,11 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
 
             elif action == "add_zone":
                 new_zone = (payload.get("zone") or "").strip()
+                if "," in new_zone:
+                    return self.send_json({
+                        "success": False,
+                        "error": "Por medio del botón de creación rápida (+) solo se permite el ingreso de una (1) zona individual. Para registrar múltiples zonas separadas por comas, utiliza el menú de Configuración."
+                    }, status=400)
                 set_active = payload.get("set_active", True)
                 if new_zone:
                     database.add_zone_to_location(location_name, new_zone)

@@ -414,7 +414,22 @@ async function saveConfig() {
     const locationName = document.getElementById('cfgLocationName').value.trim() || 'Sede Principal';
     const currentZone = document.getElementById('cfgCurrentZone') ? document.getElementById('cfgCurrentZone').value.trim() : '';
     const locationZonesRaw = document.getElementById('cfgLocationZones') ? document.getElementById('cfgLocationZones').value.trim() : '';
-    const locationZonesList = locationZonesRaw ? locationZonesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+    if (currentZone && currentZone.includes(',')) {
+        alert('⚠️ El campo "Zona Activa del Recorrido" solo puede contener una (1) zona individual activa.\n\nSi deseas registrar múltiples zonas, ingrésalas separadas por coma (,) en el campo "Zonas Predefinidas".');
+        return;
+    }
+
+    // Split multiple comma-separated zones, trim each, and deduplicate
+    const locationZonesList = [];
+    if (locationZonesRaw) {
+        locationZonesRaw.split(',').forEach(item => {
+            const clean = item.trim();
+            if (clean && !locationZonesList.includes(clean)) {
+                locationZonesList.push(clean);
+            }
+        });
+    }
 
     const targetUrl = document.getElementById('cfgTargetUrl').value.trim();
     const interval = document.getElementById('cfgInterval').value;
@@ -582,11 +597,17 @@ async function changeActiveZone(newZone) {
     }
 }
 
-// Quick add zone for the current location
+// Quick add zone for the current location (single zone only)
 async function quickAddZone() {
     const curLoc = document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Sede Principal';
-    const zoneName = prompt(`Ingresa el nombre de la nueva zona para el recorrido en "${curLoc}"\n(ej: Rack:1-2, Rack:3-4, Muelles:1-2, Mezanine, Bunker):`);
+    const zoneName = prompt(`Ingresa el nombre de la nueva zona para el recorrido en "${curLoc}":\n(Ej: Habitación:302, Rack:5-6, Bunker, Mezanine)\n\n* Nota: Por medio de esta función rápida (+) solo se permite 1 sola zona para activarla en el recorrido.\nPara ingresar múltiples zonas separadas por coma (,), utiliza el menú "⚙️ Configuración".`);
     if (!zoneName || !zoneName.trim()) return;
+
+    const trimmed = zoneName.trim();
+    if (trimmed.includes(',')) {
+        alert('⚠️ Por medio del botón de creación rápida (+) solo se permite el ingreso de un (1) solo registro a la vez para fijarlo de inmediato como zona activa.\n\nPara ingresar varias zonas separadas por coma (,), por favor abre el menú "⚙️ Configuración" en la barra superior y agrégalas en el campo "Zonas Predefinidas".');
+        return;
+    }
 
     try {
         const res = await fetch('/api/zones', {
@@ -594,7 +615,7 @@ async function quickAddZone() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 action: 'add_zone',
-                zone: zoneName.trim(),
+                zone: trimmed,
                 location: curLoc,
                 set_active: true
             })

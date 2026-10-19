@@ -204,9 +204,15 @@ def get_location_zones_map() -> Dict[str, List[str]]:
     }
 
 def set_location_zones(location_name: str, zones: List[str]):
-    """Updates the configured zones for a specific location in config."""
+    """Updates the configured zones for a specific location in config, properly flattening comma-separated entries."""
     mapping = get_location_zones_map()
-    mapping[location_name] = [str(z).strip() for z in zones if str(z).strip()]
+    cleaned = []
+    for z in zones:
+        for sub in str(z).split(","):
+            sub_clean = sub.strip()
+            if sub_clean and sub_clean not in cleaned:
+                cleaned.append(sub_clean)
+    mapping[location_name] = cleaned
     set_config_key("zones_by_location", json.dumps(mapping, ensure_ascii=False))
 
 def add_zone_to_location(location_name: str, zone_name: str) -> List[str]:
