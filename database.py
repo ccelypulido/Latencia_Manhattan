@@ -378,11 +378,11 @@ def get_statistics(location_filter: Optional[str] = None, zone_filter: Optional[
             "status_codes": status_codes
         }
 
-def get_location_comparison() -> List[Dict[str, Any]]:
-    """Returns comparative metrics grouped by location."""
+def get_location_comparison(location_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Returns comparative metrics grouped by location with optional location filter."""
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        query = """
             SELECT 
                 location,
                 COUNT(*) as total_samples,
@@ -394,20 +394,27 @@ def get_location_comparison() -> List[Dict[str, Any]]:
                 MAX(total_ms) as peak_total
             FROM records
             WHERE is_error = 0
+        """
+        params = []
+        if location_filter and location_filter != "all":
+            query += " AND location = ?"
+            params.append(location_filter)
+        query += """
             GROUP BY location
             ORDER BY location ASC
-        """)
+        """
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         return [
             {
-                "location": r[0],
-                "total_samples": r[1],
-                "avg_total": round(r[2], 2) if r[2] else 0,
-                "avg_dns": round(r[3], 2) if r[3] else 0,
-                "avg_tcp": round(r[4], 2) if r[4] else 0,
-                "avg_tls": round(r[5], 2) if r[5] else 0,
-                "avg_ttfb": round(r[6], 2) if r[6] else 0,
-                "peak_total": round(r[7], 2) if r[7] else 0
+                "location": r["location"],
+                "total_samples": r["total_samples"],
+                "avg_total": round(r["avg_total"], 2) if r["avg_total"] else 0,
+                "avg_dns": round(r["avg_dns"], 2) if r["avg_dns"] else 0,
+                "avg_tcp": round(r["avg_tcp"], 2) if r["avg_tcp"] else 0,
+                "avg_tls": round(r["avg_tls"], 2) if r["avg_tls"] else 0,
+                "avg_ttfb": round(r["avg_ttfb"], 2) if r["avg_ttfb"] else 0,
+                "peak_total": round(r["peak_total"], 2) if r["peak_total"] else 0
             }
             for r in rows
         ]
@@ -442,15 +449,15 @@ def get_zone_comparison(location_filter: Optional[str] = None) -> List[Dict[str,
         rows = cursor.fetchall()
         return [
             {
-                "location": r[0],
-                "zone": r[1],
-                "total_samples": r[2],
-                "avg_total": round(r[3], 2) if r[3] else 0,
-                "avg_ttfb": round(r[4], 2) if r[4] else 0,
-                "avg_tcp": round(r[5], 2) if r[5] else 0,
-                "avg_tls": round(r[6], 2) if r[6] else 0,
-                "avg_dns": round(r[7], 2) if r[7] else 0,
-                "peak_total": round(r[8], 2) if r[8] else 0
+                "location": r["location"],
+                "zone": r["zone_name"],
+                "total_samples": r["total_samples"],
+                "avg_total": round(r["avg_total"], 2) if r["avg_total"] else 0,
+                "avg_ttfb": round(r["avg_ttfb"], 2) if r["avg_ttfb"] else 0,
+                "avg_tcp": round(r["avg_tcp"], 2) if r["avg_tcp"] else 0,
+                "avg_tls": round(r["avg_tls"], 2) if r["avg_tls"] else 0,
+                "avg_dns": round(r["avg_dns"], 2) if r["avg_dns"] else 0,
+                "peak_total": round(r["peak_total"], 2) if r["peak_total"] else 0
             }
             for r in rows
         ]

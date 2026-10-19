@@ -743,30 +743,80 @@ async function fetchStats() {
     }
 }
 
-// Fetch comparative metrics by location
+// Fetch comparative metrics by location and zones
 async function fetchComparison() {
     try {
-        const res = await fetch('/api/comparison');
-        const rows = await res.json();
+        const filterLoc = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
+        let url = '/api/comparison';
+        if (filterLoc && filterLoc !== 'all') {
+            url += `?location=${encodeURIComponent(filterLoc)}`;
+        }
+        const res = await fetch(url);
+        if (!res.ok) {
+            console.warn('Error en /api/comparison status:', res.status);
+            return;
+        }
+        const data = await res.json();
         const tbody = document.getElementById('locationComparisonBody');
+        if (!tbody) return;
 
-        if (!rows || rows.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay suficientes datos registradas para comparar sedes.</td></tr>`;
+        // Support both old array format and new { locations, zones } object format
+        let rows = [];
+        let zoneRows = [];
+        if (Array.isArray(data)) {
+            rows = data;
+        } else if (data && typeof data === 'object') {
+            rows = data.locations || [];
+            zoneRows = data.zones || [];
+        }
+
+        if ((!rows || rows.length === 0) && (!zoneRows || zoneRows.length === 0)) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay suficientes datos registrados para comparar sedes.</td></tr>`;
             return;
         }
 
-        tbody.innerHTML = rows.map(r => `
-            <tr>
-                <td><span class="loc-pill">${r.location}</span></td>
-                <td>${r.total_samples}</td>
-                <td>${r.avg_dns} ms</td>
-                <td>${r.avg_tcp} ms</td>
-                <td>${r.avg_tls} ms</td>
-                <td class="text-success font-bold">${r.avg_ttfb} ms</td>
-                <td class="font-bold text-blue">${r.avg_total} ms</td>
-                <td class="text-danger font-bold">${r.peak_total} ms</td>
-            </tr>
-        `).join('');
+        let html = '';
+        if (rows.length > 0) {
+            html += rows.map(r => `
+                <tr>
+                    <td><span class="loc-pill">${r.location}</span></td>
+                    <td>${r.total_samples}</td>
+                    <td>${r.avg_dns} ms</td>
+                    <td>${r.avg_tcp} ms</td>
+                    <td>${r.avg_tls} ms</td>
+                    <td class="text-success font-bold">${r.avg_ttfb} ms</td>
+                    <td class="font-bold text-blue">${r.avg_total} ms</td>
+                    <td class="text-danger font-bold">${r.peak_total} ms</td>
+                </tr>
+            `).join('');
+        }
+
+        if (zoneRows.length > 0) {
+            html += `
+                <tr class="table-subgroup-header" style="background: rgba(14, 165, 233, 0.08); border-top: 1px solid rgba(14, 165, 233, 0.25);">
+                    <td colspan="8" style="font-size: 0.74rem; font-weight: 700; color: #38bdf8; padding: 0.35rem 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;">
+                        📍 Rendimiento por Zonas Físicas de Recorrido
+                    </td>
+                </tr>
+            `;
+            html += zoneRows.map(z => `
+                <tr style="font-size: 0.83rem;">
+                    <td>
+                        <span class="loc-pill" style="opacity: 0.85;">${z.location}</span>
+                        <span class="zone-pill ${z.zone.startsWith('(') ? 'empty' : ''}" style="margin-left: 0.35rem;">${z.zone}</span>
+                    </td>
+                    <td>${z.total_samples}</td>
+                    <td>${z.avg_dns} ms</td>
+                    <td>${z.avg_tcp} ms</td>
+                    <td>${z.avg_tls} ms</td>
+                    <td class="text-success font-bold">${z.avg_ttfb} ms</td>
+                    <td class="font-bold text-blue">${z.avg_total} ms</td>
+                    <td class="text-danger font-bold">${z.peak_total} ms</td>
+                </tr>
+            `).join('');
+        }
+
+        tbody.innerHTML = html;
 
     } catch (err) {
         console.error('Error fetching comparison:', err);

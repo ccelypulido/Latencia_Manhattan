@@ -272,7 +272,7 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/comparison":
             location_filter = query.get("location", [None])[0]
-            comparison = database.get_location_comparison()
+            comparison = database.get_location_comparison(location_filter=location_filter)
             zone_comparison = database.get_zone_comparison(location_filter=location_filter)
             return self.send_json({
                 "locations": comparison,
