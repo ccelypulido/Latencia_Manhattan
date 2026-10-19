@@ -204,6 +204,69 @@ body {
     color: var(--accent-purple);
 }
 
+/* Zone Selector in Navbar Context */
+.zone-selector-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(14, 165, 233, 0.12);
+    padding: 0.18rem 0.45rem 0.18rem 0.6rem;
+    border-radius: 16px;
+    border: 1px solid rgba(14, 165, 233, 0.35);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.zone-selector-wrapper:hover,
+.zone-selector-wrapper:focus-within {
+    border-color: rgba(14, 165, 233, 0.6);
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.2);
+}
+
+.zone-select {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #38bdf8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0.1rem 0.2rem;
+    max-width: 180px;
+}
+
+.zone-select option {
+    background: #0f172a;
+    color: #f8fafc;
+    font-weight: 500;
+}
+
+.btn-zone-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(56, 189, 248, 0.2);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.btn-zone-add:hover {
+    background: #38bdf8;
+    color: #0f172a;
+    transform: scale(1.1);
+}
+
+.btn-zone-add i, .btn-zone-add svg {
+    width: 12px;
+    height: 12px;
+}
+
 .url-badge {
     display: inline-flex;
     align-items: center;
@@ -661,7 +724,26 @@ body {
     border-radius: 6px;
     font-weight: 600;
     font-size: 0.78rem;
+}
 
+/* Zone Pill */
+.zone-pill {
+    display: inline-block;
+    background: rgba(14, 165, 233, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.76rem;
+    white-space: nowrap;
+}
+
+.zone-pill.empty {
+    background: rgba(148, 163, 184, 0.1);
+    color: #94a3b8;
+    border: 1px dashed rgba(148, 163, 184, 0.25);
+    font-weight: 500;
 }
 
 /* Modals */

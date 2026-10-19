@@ -1,6 +1,7 @@
 import http.server
 import json
 import os
+import sys
 import csv
 import io
 import urllib.parse
@@ -45,10 +46,11 @@ def background_probe_loop():
             timeout = float(cfg.get("timeout_seconds", "5"))
             target_url = cfg.get("target_url", "https://alkop.sce.manh.com/ping")
             location_name = cfg.get("location_name", "Sede Principal")
+            current_zone = cfg.get("current_zone", "")
 
             if auto_enabled and target_url:
                 result = probe.measure_latency(target_url, timeout=timeout, auth_config=cfg)
-                database.save_record(result, location=location_name)
+                database.save_record(result, location=location_name, zone=current_zone)
 
             # Scheduled ICMP Network Diagnostic (Configurable interval in minutes, default 15 min)
             now_ts = time.time()
@@ -58,6 +60,7 @@ def background_probe_loop():
                     diag_interval_min = 15.0
             except (ValueError, TypeError):
                 diag_interval_min = 15.0
+
             diag_interval_secs = diag_interval_min * 60.0
 
             if auto_enabled and (now_ts - last_net_diag_time >= diag_interval_secs):
@@ -65,9 +68,9 @@ def background_probe_loop():
                 try:
                     extra_targets = cfg.get("extra_ping_targets", "")
                     excluded_targets = cfg.get("excluded_ping_targets", "")
-                    print(f"[INFO] Running scheduled network diagnostic (every {diag_interval_min:g} min) for '{location_name}'...")
+                    print(f"[INFO] Running scheduled network diagnostic (every {diag_interval_min:g} min) for '{location_name}' [{current_zone or 'Sin Zona'}]...")
                     net_results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets, exclude_hosts_str=excluded_targets)
-                    saved_id = database.save_net_diag_run(net_results, location=location_name)
+                    saved_id = database.save_net_diag_run(net_results, location=location_name, zone=current_zone)
                     print(f"[INFO] Scheduled network diagnostic saved (ID #{saved_id}, {len(net_results)} targets).")
                 except Exception as nd_err:
                     print(f"[ERROR] Scheduled network diagnostic error: {nd_err}")
@@ -86,14 +89,14 @@ def generate_http_csv(records: list) -> str:
     """Generates a standard CSV string for HTTP probe latency records."""
     output = io.StringIO()
     fieldnames = [
-        "id", "created_at", "location", "url", "ip", "status_code",
+        "id", "created_at", "location", "zone", "url", "ip", "status_code",
         "dns_ms", "tcp_ms", "tls_ms", "ttfb_ms", "transfer_ms", "total_ms",
         "is_error", "error_message", "response_size_bytes"
     ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for r in records:
-        row_copy = {k: r.get(k) for k in fieldnames}
+        row_copy = {k: r.get(k, "") for k in fieldnames}
         writer.writerow(row_copy)
     return output.getvalue()
 
@@ -101,7 +104,7 @@ def generate_icmp_csv(runs: list) -> str:
     """Generates a detailed CSV string for ICMP ping and traceroute diagnostic runs."""
     output = io.StringIO()
     fieldnames = [
-        "run_id", "created_at", "location", "target_type", "target_name", "target_host",
+        "run_id", "created_at", "location", "zone", "target_type", "target_name", "target_host",
         "status", "ping_min_ms", "ping_avg_ms", "ping_max_ms", "jitter_mdev_ms",
         "packet_loss_pct", "traceroute_hops_count", "traceroute_reached", "traceroute_path", "error"
     ]
@@ -111,6 +114,7 @@ def generate_icmp_csv(runs: list) -> str:
         run_id = run["id"]
         created_at = run["created_at"]
         location = run["location"]
+        zone = run.get("zone", "")
         for target in run.get("results", []):
             ping = target.get("ping", {})
             trace = target.get("traceroute", {})
@@ -127,6 +131,7 @@ def generate_icmp_csv(runs: list) -> str:
                 "run_id": run_id,
                 "created_at": created_at,
                 "location": location,
+                "zone": zone,
                 "target_type": target.get("type", "extra"),
                 "target_name": target.get("name", target.get("host", "")),
                 "target_host": target.get("host", ""),
@@ -222,11 +227,13 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             cfg = database.get_config()
             target_url = query.get("url", [cfg.get("target_url", "https://alkop.sce.manh.com/ping")])[0]
             timeout = float(query.get("timeout", [cfg.get("timeout_seconds", "5")])[0])
-            location_name = cfg.get("location_name", "Sede Principal")
+            location_name = query.get("location", [cfg.get("location_name", "Sede Principal")])[0]
+            zone_name = query.get("zone", [cfg.get("current_zone", "")])[0]
             result = probe.measure_latency(target_url, timeout=timeout, auth_config=cfg)
-            rec_id = database.save_record(result, location=location_name)
+            rec_id = database.save_record(result, location=location_name, zone=zone_name)
             result['id'] = rec_id
             result['location'] = location_name
+            result['zone'] = zone_name
             return self.send_json(result)
 
         elif path == "/api/history":
@@ -234,24 +241,44 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             offset = int(query.get("offset", [0])[0])
             status_filter = query.get("status", [None])[0]
             location_filter = query.get("location", [None])[0]
-            records = database.get_history(limit=limit, offset=offset, status_filter=status_filter, location_filter=location_filter)
+            zone_filter = query.get("zone", [None])[0]
+            records = database.get_history(limit=limit, offset=offset, status_filter=status_filter, location_filter=location_filter, zone_filter=zone_filter)
             return self.send_json({"records": records, "count": len(records)})
 
         elif path == "/api/stats":
             location_filter = query.get("location", [None])[0]
-            stats = database.get_statistics(location_filter=location_filter)
+            zone_filter = query.get("zone", [None])[0]
+            stats = database.get_statistics(location_filter=location_filter, zone_filter=zone_filter)
             return self.send_json(stats)
 
         elif path == "/api/locations":
             locations = database.get_locations()
             return self.send_json(locations)
 
+        elif path == "/api/zones":
+            location_filter = query.get("location", [None])[0]
+            cfg = database.get_config()
+            current_zone = cfg.get("current_zone", "")
+            zones = database.get_zones(location_filter=location_filter)
+            zones_by_loc = database.get_location_zones_map()
+            return self.send_json({
+                "current_zone": current_zone,
+                "zones": zones,
+                "zones_by_location": zones_by_loc
+            })
+
         elif path == "/api/comparison":
+            location_filter = query.get("location", [None])[0]
             comparison = database.get_location_comparison()
-            return self.send_json(comparison)
+            zone_comparison = database.get_zone_comparison(location_filter=location_filter)
+            return self.send_json({
+                "locations": comparison,
+                "zones": zone_comparison
+            })
 
         elif path == "/api/net-diag":
             location_filter = query.get("location", [None])[0]
+            zone_filter = query.get("zone", [None])[0]
             run_id = query.get("run_id", [None])[0]
             
             run_data = None
@@ -262,9 +289,9 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
                     run_data = None
 
             if not run_data:
-                run_data = database.get_latest_net_diag(location_filter=location_filter)
+                run_data = database.get_latest_net_diag(location_filter=location_filter, zone_filter=zone_filter)
 
-            runs_list = database.get_net_diag_runs_list(location_filter=location_filter, limit=50)
+            runs_list = database.get_net_diag_runs_list(location_filter=location_filter, zone_filter=zone_filter, limit=50)
             gw = net_diag.get_cached_gateway()
             dns_list = net_diag.get_cached_dns_servers()
             cfg = database.get_config()
@@ -283,9 +310,12 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             start_date = query.get("start", [None])[0]
             end_date = query.get("end", [None])[0]
             location_filter = query.get("location", [None])[0]
+            zone_filter = query.get("zone", [None])[0]
             if location_filter == "all" or location_filter == "":
                 location_filter = None
-            report_data = database.get_report_data(start_date=start_date, end_date=end_date, location_filter=location_filter)
+            if zone_filter == "all" or zone_filter == "":
+                zone_filter = None
+            report_data = database.get_report_data(start_date=start_date, end_date=end_date, location_filter=location_filter, zone_filter=zone_filter)
             return self.send_json(report_data)
 
         elif path == "/api/config":
@@ -296,16 +326,22 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             export_type = query.get("type", ["all"])[0].lower()
             export_format = query.get("format", ["zip" if export_type == "all" else "csv"])[0].lower()
             location_filter = query.get("location", [None])[0]
+            zone_filter = query.get("zone", [None])[0]
+            if location_filter == "all" or location_filter == "":
+                location_filter = None
+            if zone_filter == "all" or zone_filter == "":
+                zone_filter = None
 
-            loc_suffix = f"_{location_filter}" if (location_filter and location_filter != "all") else ""
+            loc_suffix = f"_{location_filter}" if location_filter else ""
+            zone_suffix = f"_zona_{zone_filter}" if zone_filter else ""
             date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
             if export_type == "http":
-                history = database.get_history(limit=50000, offset=0, location_filter=location_filter)
+                history = database.get_history(limit=50000, offset=0, location_filter=location_filter, zone_filter=zone_filter)
                 if export_format == "json":
                     return self.send_json(history)
                 csv_content = generate_http_csv(history)
-                filename = f"latencia_http{loc_suffix}_{date_str}.csv"
+                filename = f"latencia_http{loc_suffix}{zone_suffix}_{date_str}.csv"
                 body = csv_content.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/csv; charset=utf-8")
@@ -316,11 +352,11 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             elif export_type == "icmp":
-                net_history = database.get_all_net_diag_history(location_filter=location_filter)
+                net_history = database.get_all_net_diag_history(location_filter=location_filter, zone_filter=zone_filter)
                 if export_format == "json":
                     return self.send_json(net_history)
                 csv_content = generate_icmp_csv(net_history)
-                filename = f"diagnostico_red_icmp{loc_suffix}_{date_str}.csv"
+                filename = f"diagnostico_red_icmp{loc_suffix}{zone_suffix}_{date_str}.csv"
                 body = csv_content.encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/csv; charset=utf-8")
@@ -332,8 +368,8 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
 
             else:
                 # Default "all": Package both HTTP and ICMP into a single ZIP archive
-                history = database.get_history(limit=50000, offset=0, location_filter=location_filter)
-                net_history = database.get_all_net_diag_history(location_filter=location_filter)
+                history = database.get_history(limit=50000, offset=0, location_filter=location_filter, zone_filter=zone_filter)
+                net_history = database.get_all_net_diag_history(location_filter=location_filter, zone_filter=zone_filter)
 
                 if export_format == "json":
                     return self.send_json({"http_latency": history, "network_diagnostics": net_history})
@@ -343,11 +379,11 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
 
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-                    zf.writestr(f"latencia_http_manhattan{loc_suffix}.csv", http_csv)
-                    zf.writestr(f"diagnostico_red_icmp_traceroute{loc_suffix}.csv", icmp_csv)
+                    zf.writestr(f"latencia_http_manhattan{loc_suffix}{zone_suffix}.csv", http_csv)
+                    zf.writestr(f"diagnostico_red_icmp_traceroute{loc_suffix}{zone_suffix}.csv", icmp_csv)
                 
                 zip_data = zip_buffer.getvalue()
-                filename = f"auditoria_latencia_red{loc_suffix}_{date_str}.zip"
+                filename = f"auditoria_latencia_red{loc_suffix}{zone_suffix}_{date_str}.zip"
                 self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
                 self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
@@ -373,23 +409,64 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/config":
             for k, v in payload.items():
-                database.set_config_key(k, str(v))
+                database.set_config_key(k, str(v) if not isinstance(v, (dict, list)) else json.dumps(v))
             return self.send_json({"success": True, "config": database.get_config()})
+
+        elif path == "/api/zones":
+            action = payload.get("action", "set_current")
+            location_name = payload.get("location") or database.get_config().get("location_name", "Sede Principal")
+            
+            if action == "set_current":
+                zone_val = (payload.get("zone") or "").strip()
+                database.set_config_key("current_zone", zone_val)
+                if zone_val:
+                    database.add_zone_to_location(location_name, zone_val)
+                return self.send_json({
+                    "success": True,
+                    "current_zone": zone_val,
+                    "zones": database.get_zones(location_filter=location_name)
+                })
+
+            elif action == "add_zone":
+                new_zone = (payload.get("zone") or "").strip()
+                set_active = payload.get("set_active", True)
+                if new_zone:
+                    database.add_zone_to_location(location_name, new_zone)
+                    if set_active:
+                        database.set_config_key("current_zone", new_zone)
+                return self.send_json({
+                    "success": True,
+                    "current_zone": database.get_config().get("current_zone", ""),
+                    "zones": database.get_zones(location_filter=location_name)
+                })
+
+            elif action == "set_zones":
+                zones_list = payload.get("zones", [])
+                database.set_location_zones(location_name, zones_list)
+                return self.send_json({
+                    "success": True,
+                    "zones": database.get_zones(location_filter=location_name),
+                    "zones_by_location": database.get_location_zones_map()
+                })
+
+            return self.send_json({"success": False, "error": "Invalid action"}, status=400)
 
         elif path == "/api/net-diag/run":
             global last_net_diag_time
             last_net_diag_time = time.time()
             cfg = database.get_config()
             location_name = payload.get("location") or cfg.get("location_name", "Sede Principal")
+            zone_name = payload.get("zone") if "zone" in payload else cfg.get("current_zone", "")
             extra_targets = payload.get("extra_targets") if "extra_targets" in payload else cfg.get("extra_ping_targets", "")
             excluded_targets = cfg.get("excluded_ping_targets", "")
             results = net_diag.run_full_network_diagnostic(extra_hosts_str=extra_targets, exclude_hosts_str=excluded_targets)
-            saved_id = database.save_net_diag_run(results, location=location_name)
+            saved_id = database.save_net_diag_run(results, location=location_name, zone=zone_name)
             return self.send_json({
                 "success": True,
                 "id": saved_id,
                 "results": results,
                 "location": location_name,
+                "zone": zone_name,
                 "timestamp": time.time()
             })
 
@@ -411,7 +488,8 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/clear":
             query = urllib.parse.parse_qs(parsed.query)
             location_filter = payload.get("location") or query.get("location", [None])[0]
-            database.clear_records(location_filter=location_filter)
+            zone_filter = payload.get("zone") or query.get("zone", [None])[0]
+            database.clear_records(location_filter=location_filter, zone_filter=zone_filter)
             return self.send_json({"success": True, "message": "History cleared successfully"})
 
         self.send_error(404, "Endpoint not found")
@@ -425,12 +503,12 @@ def run():
     background_thread.start()
 
     server = QuietThreadingHTTPServer((HOST, PORT), LatencyHandler)
-    print(f"\n=======================================================")
+    print("\n=======================================================")
     print(f"🚀 Manhattan Latency Analyzer running at:")
     print(f"👉 Local: http://localhost:{PORT}")
     print(f"👉 Target URL: https://alkop.sce.manh.com/ping")
     print(f"👉 Cross-Platform: Compatible with Windows & Linux")
-    print(f"=======================================================\n")
+    print("=======================================================\n")
 
     try:
         server.serve_forever()

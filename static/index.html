@@ -97,6 +97,17 @@
                             <span id="currentLocationBadge">Sede Principal</span>
                         </div>
                     </div>
+                    <div class="meta-item zone-context-item" title="Zona física actual donde se toman las pruebas en el recorrido (ej. Rack:1-2, Bunker, Muelles)">
+                        <span class="meta-label"><i data-lucide="compass"></i> Zona Recorrido:</span>
+                        <div class="zone-selector-wrapper">
+                            <select id="activeZoneSelect" class="zone-select font-bold" title="Cambiar rápidamente la zona del recorrido">
+                                <option value="">(Sin Zona / General)</option>
+                            </select>
+                            <button type="button" id="btnQuickAddZone" class="btn-zone-add" title="Crear nueva zona para esta sede (ej: Rack:5-6, Pasillo 3)">
+                                <i data-lucide="plus"></i>
+                            </button>
+                        </div>
+                    </div>
                     <div class="meta-item" title="URL bajo monitoreo continuo">
                         <span class="meta-label"><i data-lucide="globe"></i> Endpoint Destino:</span>
                         <div class="url-badge">
@@ -106,12 +117,17 @@
                 </div>
 
                 <div class="navbar-filter-group">
-                    <label for="filterLocationSelect"><i data-lucide="filter"></i> Filtrar Vista por Sede:</label>
+                    <label for="filterLocationSelect"><i data-lucide="filter"></i> Sede:</label>
                     <button class="component-help-btn" data-topic="locations" title="Ayuda técnica sobre aislamiento y filtro por Sedes">
                         <i data-lucide="help-circle"></i>
                     </button>
                     <select id="filterLocationSelect" class="form-select font-bold">
                         <option value="all">Todas las Sedes</option>
+                    </select>
+
+                    <label for="filterZoneSelect" style="margin-left: 0.5rem;"><i data-lucide="compass"></i> Zona:</label>
+                    <select id="filterZoneSelect" class="form-select font-bold">
+                        <option value="all">Todas las Zonas</option>
                     </select>
                 </div>
             </div>
@@ -443,6 +459,7 @@
                                 <th># ID</th>
                                 <th>Fecha & Hora</th>
                                 <th>Sede / Ubicación</th>
+                                <th>Zona</th>
                                 <th>IP Resuelta</th>
                                 <th>Estado HTTP</th>
                                 <th>DNS (ms)</th>
@@ -455,7 +472,7 @@
                         </thead>
                         <tbody id="historyTableBody">
                             <tr>
-                                <td colspan="11" class="text-center">Cargando registros...</td>
+                                <td colspan="12" class="text-center">Cargando registros...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -477,6 +494,20 @@
                     <label for="cfgLocationName">Nombre de la Sede / Ubicación Actual:</label>
                     <input type="text" id="cfgLocationName" class="form-input font-bold" placeholder="Ej: Sede Principal - Bogotá, Sede Medellín, Home Office">
                     <small class="form-help">Etiqueta asignada a las mediciones realizadas desde este equipo/equipo local.</small>
+                </div>
+
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="cfgCurrentZone">Zona Activa del Recorrido:</label>
+                        <input type="text" id="cfgCurrentZone" class="form-input font-bold" placeholder="Ej: Rack:1-2, Bunker, Muelles:1-2">
+                        <small class="form-help">Zona física actual en la que se ubica la prueba.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cfgLocationZones">Zonas Predefinidas (separadas por coma):</label>
+                        <input type="text" id="cfgLocationZones" class="form-input" placeholder="Rack:1-2, Rack:3-4, Muelles:1-2, Mezanine, Bunker">
+                        <small class="form-help">Catálogo de zonas para alternar con un clic al caminar.</small>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -896,17 +927,29 @@
                     </div>
                 </div>
 
-                <!-- Tab 5: Sedes -->
+                <!-- Tab 5: Sedes y Zonas -->
                 <div class="help-tab-content" id="tab-locations">
                     <div class="help-box">
-                        <div class="help-box-title"><i data-lucide="map-pin"></i> Sistema de Etiquetado por Sedes (Location Tagging)</div>
+                        <div class="help-box-title"><i data-lucide="map-pin"></i> Sistema de Etiquetado por Sedes y Zonas Físicas de Bodega</div>
                         <p>Cuando se realizan pruebas en diferentes días o desde diferentes sucursales (ej. Sede Bogotá, Sede Medellín, Home Office), el sistema etiqueta cada muestra de latencia en la base de datos SQLite:</p>
                         <ul style="font-size:0.84rem; color:var(--text-secondary); margin-left:1.25rem; line-height:1.6; margin-top:0.4rem;">
                             <li><strong>Etiqueta de Sede:</strong> Configurable desde el menú <em>⚙️ Configuración</em>. Todas las pruebas realizadas desde ese equipo quedarán marcadas con esa sede.</li>
                             <li><strong>Filtro Global:</strong> El selector de la barra superior actualiza de forma reactiva todas las tarjetas, gráficos y promedios para la sede elegida (o "Todas las Sedes").</li>
                             <li><strong>Panel Comparativo entre Sedes:</strong> Contrasta en tiempo real el rendimiento relativo de cada oficina (Muestras, DNS, TCP, TLS, TTFB y Latencia Total).</li>
                             <li><strong>Limpieza Contextual:</strong> Al pulsar <em>Limpiar Histórico</em>, el sistema detecta si estás filtrando una sede específica para borrar únicamente los registros de dicha sede sin tocar las demás.</li>
-                            <li><strong>Exportación a CSV:</strong> El botón <em>Exportar</em> descarga únicamente los datos de la sede seleccionada para generar informes independientes.</li>
+                            <li><strong>Exportación a CSV / ZIP:</strong> El botón <em>Exportar</em> descarga únicamente los datos filtrados para generar informes independientes con su columna de zona.</li>
+                        </ul>
+                    </div>
+
+                    <div class="help-box" style="margin-top: 0.75rem; border-left: 3px solid var(--accent-blue);">
+                        <div class="help-box-title" style="color: var(--accent-blue);"><i data-lucide="compass"></i> Recorridos Físicos por Zonas (Site Walkthrough / Heatmap)</div>
+                        <p>Al hacer un recorrido por el centro de distribución o almacén, la latencia y calidad de señal Wi-Fi varían notablemente debido a la atenuación física causada por estanterías metálicas, racks y techos de concreto:</p>
+                        <ul style="font-size:0.84rem; color:var(--text-secondary); margin-left:1.25rem; line-height:1.6; margin-top:0.4rem;">
+                            <li><strong>Selector Rápido en Barra Superior:</strong> Ubicado en la franja de contexto de la barra de navegación (<code>Zona Recorrido</code>), permite cambiar la zona activa con un solo clic mientras caminas sin abrir ventanas de configuración.</li>
+                            <li><strong>Zonas Típicas Preconfiguradas:</strong> <code>Rack:1-2</code>, <code>Rack:3-4</code>, <code>Muelles:1-2</code>, <code>Mezanine</code>, <code>Bunker</code>.</li>
+                            <li><strong>Creación Inmediata con Botón (+):</strong> Al detectar un nuevo punto crítico o pasillo, presiona el botón <code>+</code> para registrarlo al instante.</li>
+                            <li><strong>Precisión Quirúrgica de Diagnóstico:</strong> Permite correlacionar exactamente qué zonas presentan picos de latencia (ej. mayor TTFB o retrasos TCP) o pérdidas de paquetes en el informe ejecutivo y CSV.</li>
+                            <li><strong>Compatibilidad 100% Cross-Platform:</strong> Funciona sin modificaciones tanto en Windows como en Linux.</li>
                         </ul>
                     </div>
                 </div>
@@ -1033,6 +1076,12 @@
                                 <label for="reportLocationSelect">Sede / Ubicación:</label>
                                 <select id="reportLocationSelect" class="form-control form-control-sm">
                                     <option value="all">Todas las Sedes</option>
+                                </select>
+                            </div>
+                            <div class="date-field">
+                                <label for="reportZoneSelect">Zona:</label>
+                                <select id="reportZoneSelect" class="form-control form-control-sm">
+                                    <option value="all">Todas las Zonas</option>
                                 </select>
                             </div>
                         </div>

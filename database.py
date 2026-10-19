@@ -41,10 +41,10 @@ def init_db():
         columns = [column[1] for column in cursor.fetchall()]
         if 'location' not in columns:
             cursor.execute("ALTER TABLE records ADD COLUMN location TEXT DEFAULT 'Sede Principal'")
+        if 'zone' not in columns:
+            cursor.execute("ALTER TABLE records ADD COLUMN zone TEXT DEFAULT ''")
 
         # Migration: Adjust historical total_ms to Browser / PDA methodology (TTFB + Transfer)
-        # Old logic had total_ms = dns + tcp + tls + ttfb + transfer (~380-450ms)
-        # Browser / PDA (Chrome DevTools W3C Resource Timing) measures HTTP response turnaround = TTFB + Transfer (~180-250ms)
         cursor.execute("""
             UPDATE records 
             SET total_ms = ROUND(ttfb_ms + transfer_ms, 2) 
@@ -57,9 +57,14 @@ def init_db():
                 timestamp REAL NOT NULL,
                 created_at TEXT NOT NULL,
                 location TEXT DEFAULT 'Sede Principal',
+                zone TEXT DEFAULT '',
                 results_json TEXT NOT NULL
             )
         """)
+        cursor.execute("PRAGMA table_info(net_diag_history)")
+        diag_cols = [column[1] for column in cursor.fetchall()]
+        if 'zone' not in diag_cols:
+            cursor.execute("ALTER TABLE net_diag_history ADD COLUMN zone TEXT DEFAULT ''")
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS config (
@@ -68,12 +73,18 @@ def init_db():
             )
         """)
         # Default configuration values
+        default_zones = {
+            "Bodega_CLEN": ["Rack:1-2", "Rack:3-4", "Muelles:1-2", "Mezanine", "Bunker"],
+            "Sede Principal": ["Rack:1-2", "Rack:3-4", "Muelles:1-2", "Mezanine", "Bunker", "Oficinas"]
+        }
         defaults = {
             "target_url": "https://alkop.sce.manh.com/ping",
             "interval_seconds": "10",
             "timeout_seconds": "5",
             "auto_probe_enabled": "1",
             "location_name": "Sede Principal",
+            "current_zone": "",
+            "zones_by_location": json.dumps(default_zones, ensure_ascii=False),
             "auth_enabled": "0",
             "auth_type": "ntlm",
             "auth_domain": "",
@@ -88,12 +99,14 @@ def init_db():
             cursor.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
         conn.commit()
 
-def save_record(record: Dict[str, Any], location: Optional[str] = None) -> int:
-    """Inserts a new latency measurement record with location tagging into SQLite."""
+def save_record(record: Dict[str, Any], location: Optional[str] = None, zone: Optional[str] = None) -> int:
+    """Inserts a new latency measurement record with location and zone tagging into SQLite."""
     created_at = datetime.datetime.fromtimestamp(record['timestamp'], tz=datetime.timezone.utc).isoformat()
+    cfg = get_config()
     if not location:
-        cfg = get_config()
         location = cfg.get("location_name", "Sede Principal")
+    if zone is None:
+        zone = cfg.get("current_zone", "")
 
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -101,8 +114,8 @@ def save_record(record: Dict[str, Any], location: Optional[str] = None) -> int:
             INSERT INTO records (
                 timestamp, created_at, url, ip, status_code,
                 dns_ms, tcp_ms, tls_ms, ttfb_ms, transfer_ms, total_ms,
-                is_error, error_message, response_size_bytes, location
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                is_error, error_message, response_size_bytes, location, zone
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             record['timestamp'],
             created_at,
@@ -118,13 +131,14 @@ def save_record(record: Dict[str, Any], location: Optional[str] = None) -> int:
             1 if record.get('is_error') else 0,
             record.get('error_message'),
             record.get('response_size_bytes', 0),
-            location
+            location,
+            zone or ""
         ))
         conn.commit()
         return cursor.lastrowid
 
-def get_history(limit: int = 100, offset: int = 0, status_filter: Optional[str] = None, location_filter: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieves historical latency records with filtering options."""
+def get_history(limit: int = 100, offset: int = 0, status_filter: Optional[str] = None, location_filter: Optional[str] = None, zone_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Retrieves historical latency records with filtering options by status, location, and zone."""
     with get_connection() as conn:
         cursor = conn.cursor()
         query = "SELECT * FROM records WHERE 1=1"
@@ -139,6 +153,10 @@ def get_history(limit: int = 100, offset: int = 0, status_filter: Optional[str] 
             query += " AND location = ?"
             params.append(location_filter)
 
+        if zone_filter and zone_filter != 'all':
+            query += " AND zone = ?"
+            params.append(zone_filter)
+
         query += " ORDER BY id DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
@@ -147,12 +165,93 @@ def get_history(limit: int = 100, offset: int = 0, status_filter: Optional[str] 
         return [dict(row) for row in rows]
 
 def get_locations() -> List[str]:
-    """Returns list of distinct location tags recorded in the database."""
+    """Returns list of distinct location tags recorded in the database, merged with predefined sedes."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT location FROM records WHERE location IS NOT NULL AND location != '' ORDER BY location ASC")
         rows = cursor.fetchall()
-        return [r[0] for r in rows]
+        db_locs = [r[0] for r in rows]
+
+    cfg = get_config()
+    raw = cfg.get("zones_by_location", "")
+    try:
+        mapping = json.loads(raw) if raw else {}
+    except Exception:
+        mapping = {}
+
+    predefined_locs = list(mapping.keys())
+    curr_loc = cfg.get("location_name", "Sede Principal")
+    all_locs = []
+    for l in ([curr_loc] + predefined_locs + db_locs):
+        l_str = str(l).strip()
+        if l_str and l_str not in all_locs:
+            all_locs.append(l_str)
+    return all_locs
+
+def get_location_zones_map() -> Dict[str, List[str]]:
+    """Returns the dictionary mapping each Sede to its list of configured zones."""
+    cfg = get_config()
+    raw = cfg.get("zones_by_location", "")
+    try:
+        data = json.loads(raw) if raw else {}
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {
+        "Bodega_CLEN": ["Rack:1-2", "Rack:3-4", "Muelles:1-2", "Mezanine", "Bunker"],
+        "Sede Principal": ["Rack:1-2", "Rack:3-4", "Muelles:1-2", "Mezanine", "Bunker", "Oficinas"]
+    }
+
+def set_location_zones(location_name: str, zones: List[str]):
+    """Updates the configured zones for a specific location in config."""
+    mapping = get_location_zones_map()
+    mapping[location_name] = [str(z).strip() for z in zones if str(z).strip()]
+    set_config_key("zones_by_location", json.dumps(mapping, ensure_ascii=False))
+
+def add_zone_to_location(location_name: str, zone_name: str) -> List[str]:
+    """Adds a new zone to a location and returns the updated zone list."""
+    mapping = get_location_zones_map()
+    current = mapping.get(location_name, ["Rack:1-2", "Rack:3-4", "Muelles:1-2", "Mezanine", "Bunker"])
+    zone_clean = str(zone_name).strip()
+    if zone_clean and zone_clean not in current:
+        current.append(zone_clean)
+    mapping[location_name] = current
+    set_config_key("zones_by_location", json.dumps(mapping, ensure_ascii=False))
+    set_config_key("current_zone", zone_clean)
+    return current
+
+def get_zones(location_filter: Optional[str] = None) -> List[str]:
+    """Returns distinct zones from database records and predefined zones for the location."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        query = "SELECT DISTINCT zone FROM records WHERE zone IS NOT NULL AND zone != ''"
+        params = []
+        if location_filter and location_filter != "all":
+            query += " AND location = ?"
+            params.append(location_filter)
+        query += " ORDER BY zone ASC"
+        cursor.execute(query, params)
+        db_zones = [r[0] for r in cursor.fetchall()]
+
+    mapping = get_location_zones_map()
+    predefined = []
+    if location_filter and location_filter != "all":
+        predefined = mapping.get(location_filter, ["Rack:1-2", "Rack:3-4", "Muelles:1-2", "Mezanine", "Bunker"])
+    else:
+        for z_list in mapping.values():
+            if isinstance(z_list, list):
+                predefined.extend(z_list)
+
+    if not predefined and not db_zones:
+        predefined = ["Rack:1-2", "Rack:3-4", "Muelles:1-2", "Mezanine", "Bunker"]
+
+    result = []
+    for z in (predefined + db_zones):
+        z_str = str(z).strip()
+        if z_str and z_str not in result:
+            result.append(z_str)
+    return result
 
 def calculate_percentile(sorted_list: List[float], p: float) -> float:
     """Calculates percentile p (0 to 100) from a sorted list of floats."""
@@ -170,8 +269,8 @@ def calculate_percentile(sorted_list: List[float], p: float) -> float:
     d1 = sorted_list[int(c)] * (k - f)
     return round(d0 + d1, 2)
 
-def get_statistics(location_filter: Optional[str] = None) -> Dict[str, Any]:
-    """Calculates overall statistics, averages, peaks, percentiles filtered by location."""
+def get_statistics(location_filter: Optional[str] = None, zone_filter: Optional[str] = None) -> Dict[str, Any]:
+    """Calculates overall statistics, averages, peaks, percentiles filtered by location and zone."""
     with get_connection() as conn:
         cursor = conn.cursor()
 
@@ -180,6 +279,10 @@ def get_statistics(location_filter: Optional[str] = None) -> Dict[str, Any]:
         if location_filter and location_filter != 'all':
             where_clause += " AND location = ?"
             params.append(location_filter)
+
+        if zone_filter and zone_filter != 'all':
+            where_clause += " AND zone = ?"
+            params.append(zone_filter)
 
         # Basic counts
         cursor.execute(f"SELECT COUNT(*) FROM records{where_clause}", params)
@@ -309,6 +412,49 @@ def get_location_comparison() -> List[Dict[str, Any]]:
             for r in rows
         ]
 
+def get_zone_comparison(location_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Returns comparative metrics grouped by location and zone."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        query = """
+            SELECT 
+                location,
+                COALESCE(NULLIF(zone, ''), '(General)') as zone_name,
+                COUNT(*) as total_samples,
+                AVG(total_ms) as avg_total,
+                AVG(ttfb_ms) as avg_ttfb,
+                AVG(tcp_ms) as avg_tcp,
+                AVG(tls_ms) as avg_tls,
+                AVG(dns_ms) as avg_dns,
+                MAX(total_ms) as peak_total
+            FROM records
+            WHERE is_error = 0
+        """
+        params = []
+        if location_filter and location_filter != "all":
+            query += " AND location = ?"
+            params.append(location_filter)
+        query += """
+            GROUP BY location, zone_name
+            ORDER BY location ASC, total_samples DESC
+        """
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [
+            {
+                "location": r[0],
+                "zone": r[1],
+                "total_samples": r[2],
+                "avg_total": round(r[3], 2) if r[3] else 0,
+                "avg_ttfb": round(r[4], 2) if r[4] else 0,
+                "avg_tcp": round(r[5], 2) if r[5] else 0,
+                "avg_tls": round(r[6], 2) if r[6] else 0,
+                "avg_dns": round(r[7], 2) if r[7] else 0,
+                "peak_total": round(r[8], 2) if r[8] else 0
+            }
+            for r in rows
+        ]
+
 def get_config() -> Dict[str, str]:
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -321,38 +467,55 @@ def set_config_key(key: str, value: str):
         cursor.execute("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (key, str(value)))
         conn.commit()
 
-def clear_records(location_filter: Optional[str] = None):
+def clear_records(location_filter: Optional[str] = None, zone_filter: Optional[str] = None):
     with get_connection() as conn:
         cursor = conn.cursor()
+        rec_sql = "DELETE FROM records WHERE 1=1"
+        rec_params = []
+        diag_sql = "DELETE FROM net_diag_history WHERE 1=1"
+        diag_params = []
         if location_filter and location_filter != 'all':
-            cursor.execute("DELETE FROM records WHERE location = ?", (location_filter,))
-            cursor.execute("DELETE FROM net_diag_history WHERE location = ?", (location_filter,))
-        else:
+            rec_sql += " AND location = ?"
+            rec_params.append(location_filter)
+            diag_sql += " AND location = ?"
+            diag_params.append(location_filter)
+        if zone_filter and zone_filter != 'all':
+            rec_sql += " AND zone = ?"
+            rec_params.append(zone_filter)
+            diag_sql += " AND zone = ?"
+            diag_params.append(zone_filter)
+
+        if not rec_params:
             cursor.execute("DELETE FROM records")
             cursor.execute("DELETE FROM net_diag_history")
+        else:
+            cursor.execute(rec_sql, rec_params)
+            cursor.execute(diag_sql, diag_params)
         conn.commit()
 
 
-def save_net_diag_run(results: List[Dict[str, Any]], location: Optional[str] = None) -> int:
-    """Saves a full network diagnostic run (Gateway, DNS, Extra IPs) to SQLite."""
+def save_net_diag_run(results: List[Dict[str, Any]], location: Optional[str] = None, zone: Optional[str] = None) -> int:
+    """Saves a full network diagnostic run (Gateway, DNS, Extra IPs) to SQLite with location and zone."""
     now = datetime.datetime.now(datetime.timezone.utc)
     created_at = now.isoformat()
     ts = now.timestamp()
+    cfg = get_config()
     if not location:
-        cfg = get_config()
         location = cfg.get("location_name", "Sede Principal")
+    if zone is None:
+        zone = cfg.get("current_zone", "")
 
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO net_diag_history (timestamp, created_at, location, results_json)
-            VALUES (?, ?, ?, ?)
-        """, (ts, created_at, location, json.dumps(results)))
+            INSERT INTO net_diag_history (timestamp, created_at, location, zone, results_json)
+            VALUES (?, ?, ?, ?, ?)
+        """, (ts, created_at, location, zone or "", json.dumps(results)))
         conn.commit()
         return cursor.lastrowid
 
-def get_latest_net_diag(location_filter: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Retrieves the most recent network diagnostic run for a location."""
+def get_latest_net_diag(location_filter: Optional[str] = None, zone_filter: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Retrieves the most recent network diagnostic run for a location and optional zone."""
     with get_connection() as conn:
         cursor = conn.cursor()
         query = "SELECT * FROM net_diag_history WHERE 1=1"
@@ -360,6 +523,9 @@ def get_latest_net_diag(location_filter: Optional[str] = None) -> Optional[Dict[
         if location_filter and location_filter != "all":
             query += " AND location = ?"
             params.append(location_filter)
+        if zone_filter and zone_filter != "all":
+            query += " AND zone = ?"
+            params.append(zone_filter)
         query += " ORDER BY id DESC LIMIT 1"
         cursor.execute(query, params)
         row = cursor.fetchone()
@@ -370,18 +536,22 @@ def get_latest_net_diag(location_filter: Optional[str] = None) -> Optional[Dict[
             "timestamp": row["timestamp"],
             "created_at": row["created_at"],
             "location": row["location"],
+            "zone": row["zone"] if "zone" in row.keys() else "",
             "results": json.loads(row["results_json"])
         }
 
-def get_net_diag_runs_list(location_filter: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+def get_net_diag_runs_list(location_filter: Optional[str] = None, zone_filter: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
     """Returns a list of summary records of past network diagnostic runs for the UI selector."""
     with get_connection() as conn:
         cursor = conn.cursor()
-        query = "SELECT id, timestamp, created_at, location FROM net_diag_history WHERE 1=1"
+        query = "SELECT id, timestamp, created_at, location, zone FROM net_diag_history WHERE 1=1"
         params = []
         if location_filter and location_filter != "all":
             query += " AND location = ?"
             params.append(location_filter)
+        if zone_filter and zone_filter != "all":
+            query += " AND zone = ?"
+            params.append(zone_filter)
         query += " ORDER BY id DESC LIMIT ?"
         params.append(limit)
         cursor.execute(query, params)
@@ -391,7 +561,8 @@ def get_net_diag_runs_list(location_filter: Optional[str] = None, limit: int = 5
                 "id": r["id"],
                 "timestamp": r["timestamp"],
                 "created_at": r["created_at"],
-                "location": r["location"]
+                "location": r["location"],
+                "zone": r["zone"] if "zone" in r.keys() else ""
             }
             for r in rows
         ]
@@ -412,8 +583,8 @@ def get_net_diag_run_by_id(run_id: int) -> Optional[Dict[str, Any]]:
             "results": json.loads(row["results_json"])
         }
 
-def get_all_net_diag_history(location_filter: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieves all network diagnostic runs for export."""
+def get_all_net_diag_history(location_filter: Optional[str] = None, zone_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Retrieves all network diagnostic runs for export with optional location and zone filter."""
     with get_connection() as conn:
         cursor = conn.cursor()
         query = "SELECT * FROM net_diag_history WHERE 1=1"
@@ -421,6 +592,9 @@ def get_all_net_diag_history(location_filter: Optional[str] = None) -> List[Dict
         if location_filter and location_filter != "all":
             query += " AND location = ?"
             params.append(location_filter)
+        if zone_filter and zone_filter != "all":
+            query += " AND zone = ?"
+            params.append(zone_filter)
         query += " ORDER BY id ASC"
         cursor.execute(query, params)
         rows = cursor.fetchall()
@@ -430,6 +604,7 @@ def get_all_net_diag_history(location_filter: Optional[str] = None) -> List[Dict
                 "timestamp": r["timestamp"],
                 "created_at": r["created_at"],
                 "location": r["location"],
+                "zone": r["zone"] if "zone" in r.keys() else "",
                 "results": json.loads(r["results_json"])
             }
             for r in rows
@@ -507,6 +682,25 @@ def build_report_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
             "title": f"Latencia Navegador/PDA: {avg_total} ms vs Arranque en Frío: {cold_total} ms",
             "detail": f"En producción, la PDA y Chrome mantienen activa la conexión (Keep-Alive), operando a {avg_total} ms. Una conexión desde cero que deba resolver DNS ({avg_dns} ms), abrir socket TCP ({avg_tcp} ms) y negociar TLS ({avg_tls} ms) acumula {cold_total} ms."
         })
+
+    # Check zone-specific highlight if available
+    zone_list = data.get("zone_breakdown", [])
+    if zone_list:
+        worst_zone = max(zone_list, key=lambda z: (z.get("avg_total") or 0))
+        if (worst_zone.get("avg_total") or 0) > 280:
+            highlights.append({
+                "badge": f"Foco en Zona: {worst_zone.get('zone')}",
+                "badge_class": "badge-rose",
+                "type": "network",
+                "title": f"Zona Crítica de Recorrido: {worst_zone.get('zone')} ({worst_zone.get('location')})",
+                "detail": f"Durante el recorrido, la zona '{worst_zone.get('zone')}' registró una latencia promedio de {worst_zone.get('avg_total')} ms y picos de {worst_zone.get('peak_total')} ms ({worst_zone.get('samples')} muestras). Requiere inspección física de radiofrecuencia y atenuación por racks metálicos."
+            })
+            recommendations.append({
+                "priority": "Alta",
+                "priority_class": "badge-rose",
+                "category": f"Auditoría RF en {worst_zone.get('zone')}",
+                "text": f"Priorizar medición de señal Wi-Fi en '{worst_zone.get('zone')}'. Verificar si las antenas tienen obstrucción física o si las terminales PDA caen a señal menor a -67 dBm en este sector."
+            })
 
     # 2. SLA & Critical Peaks
     if peak > 1500:
@@ -619,8 +813,8 @@ def build_report_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
         "recommendations": recommendations
     }
 
-def get_report_data(start_date: Optional[str] = None, end_date: Optional[str] = None, location_filter: Optional[str] = None) -> Dict[str, Any]:
-    """Calculates comprehensive analytics, daily breakdown, location breakdown, and ICMP summary for a date range."""
+def get_report_data(start_date: Optional[str] = None, end_date: Optional[str] = None, location_filter: Optional[str] = None, zone_filter: Optional[str] = None) -> Dict[str, Any]:
+    """Calculates comprehensive analytics, daily breakdown, location/zone breakdown, and ICMP summary for a date range."""
     now = datetime.datetime.now(datetime.timezone.utc)
     start_ts = 0.0
     end_ts = now.timestamp() + 86400.0
@@ -647,6 +841,9 @@ def get_report_data(start_date: Optional[str] = None, end_date: Optional[str] = 
         if location_filter and location_filter != "all":
             where_sql += " AND location = ?"
             params.append(location_filter)
+        if zone_filter and zone_filter != "all":
+            where_sql += " AND zone = ?"
+            params.append(zone_filter)
 
         cursor.execute(f"""
             SELECT COUNT(*),
@@ -764,6 +961,37 @@ def get_report_data(start_date: Optional[str] = None, end_date: Optional[str] = 
         ]
 
         cursor.execute(f"""
+            SELECT location,
+                   COALESCE(NULLIF(zone, ''), '(General / Sin Zona)') as zone,
+                   COUNT(*) as samples,
+                   ROUND(AVG(total_ms), 1) as avg_total,
+                   ROUND(AVG(ttfb_ms), 1) as avg_ttfb,
+                   ROUND(AVG(tcp_ms), 1) as avg_tcp,
+                   ROUND(AVG(tls_ms), 1) as avg_tls,
+                   ROUND(AVG(dns_ms), 1) as avg_dns,
+                   ROUND(MAX(total_ms), 1) as peak_total,
+                   SUM(CASE WHEN is_error = 1 THEN 1 ELSE 0 END) as errors
+            FROM records {where_sql}
+            GROUP BY location, zone
+            ORDER BY location ASC, samples DESC
+        """, params)
+        zone_breakdown = [
+            {
+                "location": r["location"],
+                "zone": r["zone"],
+                "samples": r["samples"],
+                "avg_total": r["avg_total"],
+                "avg_ttfb": r["avg_ttfb"],
+                "avg_tcp": r["avg_tcp"],
+                "avg_tls": r["avg_tls"],
+                "avg_dns": r["avg_dns"],
+                "peak_total": r["peak_total"],
+                "errors": r["errors"]
+            }
+            for r in cursor.fetchall()
+        ]
+
+        cursor.execute(f"""
             SELECT id, created_at, location, ROUND(total_ms, 1) as total_ms,
                    ROUND(ttfb_ms, 1) as ttfb_ms, ROUND(tcp_ms, 1) as tcp_ms,
                    ROUND(tls_ms, 1) as tls_ms, ROUND(dns_ms, 1) as dns_ms,
@@ -858,6 +1086,8 @@ def get_report_data(start_date: Optional[str] = None, end_date: Optional[str] = 
         "status_codes": status_codes,
         "daily_breakdown": daily_breakdown,
         "location_breakdown": location_breakdown,
+        "zone_breakdown": zone_breakdown,
+        "zone": zone_filter or "all",
         "worst_peaks": worst_peaks,
         "icmp_summary": icmp_summary
     }

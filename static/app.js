@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     loadConfig();
     fetchLocations();
+    fetchZones();
     refreshAllData();
 
     // Start auto-refresh polling
@@ -44,6 +45,7 @@ function setupEventListeners() {
             openModal('reportModal');
             setReportPreset('today');
             await loadReportLocations();
+            await fetchZones();
             await fetchAndRenderReport();
         });
     }
@@ -90,7 +92,10 @@ function setupEventListeners() {
     }
     const reportLocSelect = document.getElementById('reportLocationSelect');
     if (reportLocSelect) {
-        reportLocSelect.addEventListener('change', fetchAndRenderReport);
+        reportLocSelect.addEventListener('change', async () => {
+            await fetchZones();
+            fetchAndRenderReport();
+        });
     }
 
     // Network Diagnostics Trigger
@@ -105,6 +110,34 @@ function setupEventListeners() {
         historySelect.addEventListener('change', (e) => {
             fetchNetDiag(e.target.value);
         });
+    }
+
+    // Active Zone Selector (Walkthrough Switcher)
+    const activeZoneSel = document.getElementById('activeZoneSelect');
+    if (activeZoneSel) {
+        activeZoneSel.addEventListener('change', (e) => {
+            changeActiveZone(e.target.value);
+        });
+    }
+
+    // Quick Add Zone Button
+    const btnQuickAddZone = document.getElementById('btnQuickAddZone');
+    if (btnQuickAddZone) {
+        btnQuickAddZone.addEventListener('click', quickAddZone);
+    }
+
+    // Filter Zone Select
+    const filterZoneSel = document.getElementById('filterZoneSelect');
+    if (filterZoneSel) {
+        filterZoneSel.addEventListener('change', () => {
+            refreshAllData();
+        });
+    }
+
+    // Report Zone Select
+    const reportZoneSel = document.getElementById('reportZoneSelect');
+    if (reportZoneSel) {
+        reportZoneSel.addEventListener('change', fetchAndRenderReport);
     }
 
     // Modal controls
@@ -142,10 +175,14 @@ function setupEventListeners() {
                 e.preventDefault();
                 const type = item.getAttribute('data-type') || 'all';
                 const loc = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
+                const zone = document.getElementById('filterZoneSelect') ? document.getElementById('filterZoneSelect').value : null;
                 
                 let url = `/api/export?type=${encodeURIComponent(type)}`;
                 if (loc && loc !== 'all') {
                     url += `&location=${encodeURIComponent(loc)}`;
+                }
+                if (zone && zone !== 'all') {
+                    url += `&zone=${encodeURIComponent(zone)}`;
                 }
 
                 exportDropdown.classList.remove('show');
@@ -159,23 +196,44 @@ function setupEventListeners() {
     // Clear History
     document.getElementById('btnClearHistory').addEventListener('click', async () => {
         const loc = document.getElementById('filterLocationSelect').value;
-        const isSpecific = loc && loc !== 'all';
-        const msg = isSpecific
-            ? `¿Está seguro de que desea eliminar todos los registros históricos de la sede "${loc}"?`
-            : '¿Está seguro de que desea eliminar todos los registros históricos de todas las sedes?';
+        const zone = document.getElementById('filterZoneSelect') ? document.getElementById('filterZoneSelect').value : null;
+        const isLocSpecific = loc && loc !== 'all';
+        const isZoneSpecific = zone && zone !== 'all';
+
+        let msg = '¿Está seguro de que desea eliminar los registros históricos';
+        if (isLocSpecific && isZoneSpecific) {
+            msg += ` de la sede "${loc}" en la zona "${zone}"?`;
+        } else if (isLocSpecific) {
+            msg += ` de la sede "${loc}"?`;
+        } else if (isZoneSpecific) {
+            msg += ` de la zona "${zone}" en todas las sedes?`;
+        } else {
+            msg += ' de todas las sedes?';
+        }
 
         if (confirm(msg)) {
             try {
                 let url = '/api/clear';
-                if (isSpecific) {
-                    url += `?location=${encodeURIComponent(loc)}`;
+                const payload = {};
+                const params = [];
+                if (isLocSpecific) {
+                    payload.location = loc;
+                    params.push(`location=${encodeURIComponent(loc)}`);
+                }
+                if (isZoneSpecific) {
+                    payload.zone = zone;
+                    params.push(`zone=${encodeURIComponent(zone)}`);
+                }
+                if (params.length > 0) {
+                    url += '?' + params.join('&');
                 }
                 await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(isSpecific ? { location: loc } : {})
+                    body: JSON.stringify(payload)
                 });
                 await fetchLocations();
+                await fetchZones();
                 refreshAllData();
             } catch (err) {
                 alert('Error al borrar el histórico: ' + err);
@@ -185,8 +243,9 @@ function setupEventListeners() {
 
     // Filters Change
     document.getElementById('filterStatus').addEventListener('change', fetchHistory);
-    document.getElementById('filterLocationSelect').addEventListener('change', () => {
+    document.getElementById('filterLocationSelect').addEventListener('change', async () => {
         currentNetDiagRunId = 'latest';
+        await fetchZones();
         refreshAllData();
     });
 
@@ -326,6 +385,24 @@ async function loadConfig() {
             netDiagSubtitleEl.textContent = `Análisis de latencia ICMP, pérdida de paquetes, jitter y saltos de enrutamiento (Automático cada ${netDiagMinutes} min o manual con Play)`;
         }
 
+        const cfgCurrentZoneEl = document.getElementById('cfgCurrentZone');
+        if (cfgCurrentZoneEl) {
+            cfgCurrentZoneEl.value = cfg.current_zone || '';
+        }
+
+        const cfgLocZonesEl = document.getElementById('cfgLocationZones');
+        if (cfgLocZonesEl) {
+            let zonesMap = {};
+            try {
+                zonesMap = JSON.parse(cfg.zones_by_location || '{}');
+            } catch (e) {
+                zonesMap = {};
+            }
+            const currentLoc = cfg.location_name || 'Sede Principal';
+            const locList = zonesMap[currentLoc] || ['Rack:1-2', 'Rack:3-4', 'Muelles:1-2', 'Mezanine', 'Bunker'];
+            cfgLocZonesEl.value = locList.join(', ');
+        }
+
         updateAutoProbeUI(cfg.auto_probe_enabled === '1');
     } catch (err) {
         console.error('Error cargando configuración:', err);
@@ -335,6 +412,10 @@ async function loadConfig() {
 // Save configuration to server
 async function saveConfig() {
     const locationName = document.getElementById('cfgLocationName').value.trim() || 'Sede Principal';
+    const currentZone = document.getElementById('cfgCurrentZone') ? document.getElementById('cfgCurrentZone').value.trim() : '';
+    const locationZonesRaw = document.getElementById('cfgLocationZones') ? document.getElementById('cfgLocationZones').value.trim() : '';
+    const locationZonesList = locationZonesRaw ? locationZonesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
     const targetUrl = document.getElementById('cfgTargetUrl').value.trim();
     const interval = document.getElementById('cfgInterval').value;
     const timeout = document.getElementById('cfgTimeout').value;
@@ -356,11 +437,16 @@ async function saveConfig() {
     }
 
     try {
+        let updatedMap = Object.assign({}, zonesByLocation);
+        updatedMap[locationName] = locationZonesList;
+
         await fetch('/api/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 location_name: locationName,
+                current_zone: currentZone,
+                zones_by_location: JSON.stringify(updatedMap),
                 target_url: targetUrl,
                 interval_seconds: interval,
                 timeout_seconds: timeout,
@@ -380,9 +466,135 @@ async function saveConfig() {
         closeModal('configModal');
         await loadConfig();
         await fetchLocations();
+        await fetchZones();
         refreshAllData();
     } catch (err) {
         alert('Error al guardar configuración: ' + err);
+    }
+}
+
+let currentZone = '';
+let zonesByLocation = {};
+
+// Fetch list of zones and update active & filter selectors
+async function fetchZones() {
+    try {
+        const filterLoc = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
+        let url = '/api/zones';
+        if (filterLoc && filterLoc !== 'all') {
+            url += `?location=${encodeURIComponent(filterLoc)}`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+
+        currentZone = data.current_zone || '';
+        zonesByLocation = data.zones_by_location || {};
+        const zones = data.zones || [];
+
+        // 1. Populate activeZoneSelect (Walkthrough switcher)
+        const activeSel = document.getElementById('activeZoneSelect');
+        if (activeSel) {
+            const currentLoc = document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Sede Principal';
+            const locZones = zonesByLocation[currentLoc] || zones;
+            
+            const uniqueZones = Array.from(new Set([...(locZones || []), ...(currentZone ? [currentZone] : [])]));
+            let activeHtml = '<option value="">(Sin Zona / General)</option>';
+            uniqueZones.forEach(z => {
+                if (!z) return;
+                const isSel = (z === currentZone) ? 'selected' : '';
+                activeHtml += `<option value="${z}" ${isSel}>📍 ${z}</option>`;
+            });
+            activeSel.innerHTML = activeHtml;
+            activeSel.value = currentZone;
+        }
+
+        // 2. Populate filterZoneSelect (View filter)
+        const filterSel = document.getElementById('filterZoneSelect');
+        if (filterSel) {
+            const curFilter = filterSel.value || 'all';
+            let filterHtml = '<option value="all">Todas las Zonas</option>';
+            filterHtml += '<option value="">(Sin Zona / General)</option>';
+            zones.forEach(z => {
+                if (!z) return;
+                const isSel = (z === curFilter) ? 'selected' : '';
+                filterHtml += `<option value="${z}" ${isSel}>${z}</option>`;
+            });
+            filterSel.innerHTML = filterHtml;
+            if (curFilter === 'all' || zones.includes(curFilter) || curFilter === '') {
+                filterSel.value = curFilter;
+            }
+        }
+
+        // 3. Populate reportZoneSelect (Report filter)
+        const reportSel = document.getElementById('reportZoneSelect');
+        if (reportSel) {
+            const curReportVal = reportSel.value || 'all';
+            let rptHtml = '<option value="all">Todas las Zonas</option>';
+            rptHtml += '<option value="">(Sin Zona / General)</option>';
+            zones.forEach(z => {
+                if (!z) return;
+                const isSel = (z === curReportVal) ? 'selected' : '';
+                rptHtml += `<option value="${z}" ${isSel}>${z}</option>`;
+            });
+            reportSel.innerHTML = rptHtml;
+            if (curReportVal === 'all' || zones.includes(curReportVal) || curReportVal === '') {
+                reportSel.value = curReportVal;
+            }
+        }
+    } catch (err) {
+        console.error('Error fetching zones:', err);
+    }
+}
+
+// Change active zone on the fly during warehouse walkthrough
+async function changeActiveZone(newZone) {
+    try {
+        const curLoc = document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Sede Principal';
+        const res = await fetch('/api/zones', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'set_current',
+                zone: newZone,
+                location: curLoc
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            currentZone = data.current_zone;
+            await fetchZones();
+            refreshAllData();
+        }
+    } catch (err) {
+        console.error('Error changing active zone:', err);
+    }
+}
+
+// Quick add zone for the current location
+async function quickAddZone() {
+    const curLoc = document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Sede Principal';
+    const zoneName = prompt(`Ingresa el nombre de la nueva zona para el recorrido en "${curLoc}"
+(ej: Rack:1-2, Rack:3-4, Muelles:1-2, Mezanine, Bunker):`);
+    if (!zoneName || !zoneName.trim()) return;
+
+    try {
+        const res = await fetch('/api/zones', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'add_zone',
+                zone: zoneName.trim(),
+                location: curLoc,
+                set_active: true
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            await fetchZones();
+            refreshAllData();
+        }
+    } catch (err) {
+        alert('Error al agregar nueva zona: ' + err);
     }
 }
 
@@ -416,7 +628,12 @@ async function runManualProbe() {
     initLucideIcons();
 
     try {
-        const res = await fetch('/api/probe/now');
+        const activeZone = document.getElementById('activeZoneSelect') ? document.getElementById('activeZoneSelect').value : '';
+        let url = '/api/probe/now';
+        if (activeZone) {
+            url += `?zone=${encodeURIComponent(activeZone)}`;
+        }
+        const res = await fetch(url);
         const data = await res.json();
         
         btn.disabled = false;
@@ -424,6 +641,7 @@ async function runManualProbe() {
         initLucideIcons();
 
         await fetchLocations();
+        await fetchZones();
         refreshAllData();
         showDetailModal(data);
     } catch (err) {
@@ -448,9 +666,18 @@ async function refreshAllData() {
 async function fetchStats() {
     try {
         const loc = document.getElementById('filterLocationSelect').value;
+        const zone = document.getElementById('filterZoneSelect') ? document.getElementById('filterZoneSelect').value : null;
+
         let url = '/api/stats';
+        const params = [];
         if (loc && loc !== 'all') {
-            url += `?location=${encodeURIComponent(loc)}`;
+            params.push(`location=${encodeURIComponent(loc)}`);
+        }
+        if (zone && zone !== 'all') {
+            params.push(`zone=${encodeURIComponent(zone)}`);
+        }
+        if (params.length > 0) {
+            url += '?' + params.join('&');
         }
         const res = await fetch(url);
         const stats = await res.json();
@@ -533,10 +760,14 @@ async function fetchNetDiag(targetRunId = null) {
         }
 
         const loc = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
+        const zone = document.getElementById('filterZoneSelect') ? document.getElementById('filterZoneSelect').value : null;
         let url = '/api/net-diag';
         const params = [];
         if (loc && loc !== 'all') {
             params.push(`location=${encodeURIComponent(loc)}`);
+        }
+        if (zone && zone !== 'all') {
+            params.push(`zone=${encodeURIComponent(zone)}`);
         }
         if (currentNetDiagRunId && currentNetDiagRunId !== 'latest') {
             params.push(`run_id=${encodeURIComponent(currentNetDiagRunId)}`);
@@ -738,11 +969,13 @@ async function runNetworkDiagnostic() {
 
     try {
         const locFilter = document.getElementById('filterLocationSelect') ? document.getElementById('filterLocationSelect').value : null;
+        const activeZone = document.getElementById('activeZoneSelect') ? document.getElementById('activeZoneSelect').value : undefined;
         const res = await fetch('/api/net-diag/run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                location: (locFilter && locFilter !== 'all') ? locFilter : undefined
+                location: (locFilter && locFilter !== 'all') ? locFilter : undefined,
+                zone: activeZone || undefined
             })
         });
         const data = await res.json();
@@ -767,10 +1000,14 @@ async function fetchHistory() {
     try {
         const statusVal = document.getElementById('filterStatus').value;
         const locVal = document.getElementById('filterLocationSelect').value;
+        const zoneVal = document.getElementById('filterZoneSelect') ? document.getElementById('filterZoneSelect').value : null;
 
         let url = `/api/history?limit=50&status=${statusVal}`;
         if (locVal && locVal !== 'all') {
             url += `&location=${encodeURIComponent(locVal)}`;
+        }
+        if (zoneVal && zoneVal !== 'all') {
+            url += `&zone=${encodeURIComponent(zoneVal)}`;
         }
 
         const res = await fetch(url);
@@ -787,7 +1024,7 @@ async function fetchHistory() {
         // Render Table Rows
         const tbody = document.getElementById('historyTableBody');
         if (records.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted">No se encontraron registros de latencia para este filtro.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted">No se encontraron registros de latencia para este filtro.</td></tr>`;
             return;
         }
 
@@ -801,12 +1038,16 @@ async function fetchHistory() {
 
             const statusLabel = r.is_error ? (r.error_message || 'ERROR') : `HTTP ${r.status_code}`;
             const locationTag = r.location || 'Sede Principal';
+            const zoneTag = r.zone 
+                ? `<span class="zone-pill">${r.zone}</span>` 
+                : `<span class="zone-pill empty">(General)</span>`;
 
             return `
                 <tr>
                     <td>#${r.id}</td>
                     <td>${dateStr}</td>
                     <td><span class="loc-pill">${locationTag}</span></td>
+                    <td>${zoneTag}</td>
                     <td>${r.ip || 'N/A'}</td>
                     <td><span class="status-badge ${badgeClass}">${statusLabel}</span></td>
                     <td>${r.dns_ms}</td>
@@ -877,9 +1118,10 @@ function showDetailModal(r) {
                 <div><strong>ID Registro:</strong> #${r.id || 'N/A'}</div>
                 <div><strong>Fecha & Hora:</strong> ${dateStr}</div>
                 <div><strong>Sede:</strong> <span class="loc-pill">${r.location || 'Sede Principal'}</span></div>
+                <div><strong>Zona Recorrido:</strong> <span class="zone-pill ${r.zone ? '' : 'empty'}">${r.zone || '(Sin Zona / General)'}</span></div>
                 <div><strong>Estado HTTP:</strong> ${r.is_error ? `<span class="text-danger">${r.error_message}</span>` : `<span class="text-success">HTTP ${r.status_code}</span>`}</div>
-                <div style="grid-column: span 2;"><strong>URL Probe:</strong> <span style="color:var(--text-muted); word-break:break-all;">${r.url}</span></div>
                 <div><strong>IP Resuelta:</strong> ${r.ip || 'Sin resolución'}</div>
+                <div style="grid-column: span 2;"><strong>URL Probe:</strong> <span style="color:var(--text-muted); word-break:break-all;">${r.url}</span></div>
                 <div><strong>Tamaño Respuesta:</strong> ${r.response_size_bytes} bytes</div>
             </div>
 
@@ -1571,11 +1813,13 @@ async function fetchAndRenderReport() {
     const start = document.getElementById('reportStartDate').value.trim();
     const end = document.getElementById('reportEndDate').value.trim();
     const location = document.getElementById('reportLocationSelect').value;
+    const zone = document.getElementById('reportZoneSelect') ? document.getElementById('reportZoneSelect').value : 'all';
 
     const params = new URLSearchParams();
     if (start) params.append('start', start);
     if (end) params.append('end', end);
     if (location && location !== 'all') params.append('location', location);
+    if (zone && zone !== 'all') params.append('zone', zone);
 
     try {
         const res = await fetch(`/api/report?${params.toString()}`);
@@ -1618,7 +1862,50 @@ function renderReport(data) {
         ? data.period.start 
         : `${data.period.start} al ${data.period.end}`;
     const locationStr = data.location === 'all' ? 'Todas las Sedes' : data.location;
+    const zoneStr = (data.zone && data.zone !== 'all') ? data.zone : 'Todas las Zonas';
     const isSlaCompliant = data.uptime_pct >= 99.0;
+
+    // Zone Breakdown Table
+    let zoneBreakdownHtml = '';
+    if (data.zone_breakdown && data.zone_breakdown.length > 0) {
+        zoneBreakdownHtml = `
+            <div class="report-section">
+                <div class="report-section-title">
+                    <i data-lucide="compass"></i> Desglose de Rendimiento por Zonas de Recorrido
+                </div>
+                <div class="report-table-wrapper">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>Sede</th>
+                                <th>Zona de Recorrido</th>
+                                <th class="num">Muestras</th>
+                                <th class="num">Latencia Total Media</th>
+                                <th class="num">TTFB Backend</th>
+                                <th class="num">Conexión TCP</th>
+                                <th class="num">Pico Máximo</th>
+                                <th class="num">Errores</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.zone_breakdown.map(z => `
+                                <tr>
+                                    <td><strong>${z.location}</strong></td>
+                                    <td><span class="zone-pill ${z.zone.startsWith('(') ? 'empty' : ''}">${z.zone}</span></td>
+                                    <td class="num">${z.samples}</td>
+                                    <td class="num" style="color: ${(z.avg_total > 280) ? 'var(--accent-rose)' : 'var(--accent-blue)'}; font-weight: 700;">${z.avg_total} ms</td>
+                                    <td class="num">${z.avg_ttfb} ms</td>
+                                    <td class="num">${z.avg_tcp} ms</td>
+                                    <td class="num" style="color: ${(z.peak_total > 1000) ? 'var(--accent-rose)' : 'inherit'};">${z.peak_total} ms</td>
+                                    <td class="num" style="color: ${z.errors > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'}; font-weight: ${z.errors > 0 ? '700' : 'normal'};">${z.errors}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
 
     // Highlights HTML
     let highlightsHtml = '';
@@ -1942,6 +2229,9 @@ function renderReport(data) {
                     <strong>Alcance:</strong> <span>${locationStr}</span>
                 </div>
                 <div class="report-meta-item">
+                    <strong>Zona:</strong> <span>${zoneStr}</span>
+                </div>
+                <div class="report-meta-item">
                     <strong>Muestras:</strong> <span>${data.total_samples} peticiones</span>
                 </div>
                 <div class="report-meta-item">
@@ -1980,6 +2270,7 @@ function renderReport(data) {
         ${highlightsHtml}
         ${recsHtml}
         ${breakdownHtml}
+        ${zoneBreakdownHtml}
         ${dailyHtml}
         ${peaksHtml}
         ${icmpHtml}
