@@ -206,6 +206,7 @@ body {
 
 /* Zone Selector in Navbar Context */
 .zone-selector-wrapper {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -217,12 +218,13 @@ body {
 }
 
 .zone-selector-wrapper:hover,
-.zone-selector-wrapper:focus-within {
+.zone-selector-wrapper:focus-within,
+.zone-selector-wrapper.open {
     border-color: rgba(14, 165, 233, 0.6);
-    box-shadow: 0 0 10px rgba(14, 165, 233, 0.2);
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.25);
 }
 
-.zone-select {
+.zone-select-trigger {
     background: transparent;
     border: none;
     outline: none;
@@ -230,11 +232,173 @@ body {
     font-size: 0.8rem;
     font-weight: 700;
     cursor: pointer;
-    padding: 0.1rem 0.2rem;
-    max-width: 180px;
+    padding: 0.12rem 0.25rem;
+    max-width: 210px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-align: left;
+    user-select: none;
+    font-family: inherit;
+    transition: color 0.15s ease;
 }
 
-.zone-select option {
+.zone-select-trigger:hover {
+    color: #7dd3fc;
+}
+
+.zone-trigger-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 175px;
+    display: inline-block;
+}
+
+.zone-trigger-chevron {
+    width: 14px;
+    height: 14px;
+    opacity: 0.85;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.zone-selector-wrapper.open .zone-trigger-chevron {
+    transform: rotate(180deg);
+}
+
+/* Custom Dropdown Menu with adaptive viewport height */
+.zone-dropdown-menu {
+    position: absolute;
+    left: 0;
+    min-width: 230px;
+    max-width: 320px;
+    width: max-content;
+    background: rgba(15, 23, 42, 0.98);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 10px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 16px rgba(14, 165, 233, 0.2);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeInZoneDropdown 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInZoneDropdown {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.zone-dropdown-search-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.zone-search-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.zone-search-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #f8fafc;
+    font-size: 0.8rem;
+    font-family: inherit;
+    width: 100%;
+}
+
+.zone-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.zone-dropdown-list {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.35rem 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(56, 189, 248, 0.45) rgba(15, 23, 42, 0.4);
+}
+
+.zone-dropdown-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.zone-dropdown-list::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.4);
+}
+
+.zone-dropdown-list::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.4);
+    border-radius: 4px;
+}
+
+.zone-dropdown-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(56, 189, 248, 0.75);
+}
+
+.zone-dropdown-item {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    transition: background 0.15s ease, color 0.15s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.zone-dropdown-item:hover,
+.zone-dropdown-item.focused {
+    background: rgba(56, 189, 248, 0.18);
+    color: #38bdf8;
+}
+
+.zone-dropdown-item.selected {
+    background: rgba(14, 165, 233, 0.28);
+    color: #38bdf8;
+    font-weight: 600;
+}
+
+.zone-dropdown-item-check {
+    width: 14px;
+    height: 14px;
+    color: #38bdf8;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+}
+
+.zone-dropdown-item.selected .zone-dropdown-item-check {
+    opacity: 1;
+}
+
+.zone-dropdown-empty {
+    padding: 0.85rem 0.75rem;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.zone-select, .form-select option {
     background: #0f172a;
     color: #f8fafc;
     font-weight: 500;

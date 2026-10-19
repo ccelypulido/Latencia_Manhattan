@@ -99,13 +99,28 @@
                     </div>
                     <div class="meta-item zone-context-item" title="Zona física actual donde se toman las pruebas en el recorrido (ej. Rack:1-2, Bunker, Muelles)">
                         <span class="meta-label"><i data-lucide="compass"></i> Zona Recorrido:</span>
-                        <div class="zone-selector-wrapper">
-                            <select id="activeZoneSelect" class="zone-select font-bold" title="Cambiar rápidamente la zona del recorrido">
+                        <div class="zone-selector-wrapper" id="zoneDropdownContainer">
+                            <button type="button" class="zone-select-trigger" id="btnZoneDropdownTrigger" title="Cambiar rápidamente la zona del recorrido" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="zone-trigger-text" id="zoneTriggerText">(Sin Zona / General)</span>
+                                <i data-lucide="chevron-down" class="zone-trigger-chevron"></i>
+                            </button>
+                            <select id="activeZoneSelect" class="zone-select-hidden" style="display:none;" title="Cambiar rápidamente la zona del recorrido">
                                 <option value="">(Sin Zona / General)</option>
                             </select>
                             <button type="button" id="btnQuickAddZone" class="btn-zone-add" title="Crear nueva zona para esta sede (ej: Rack:5-6, Pasillo 3)">
                                 <i data-lucide="plus"></i>
                             </button>
+
+                            <!-- Menú Desplegable con Alto Adaptable a la Ventana -->
+                            <div class="zone-dropdown-menu" id="zoneDropdownMenu" role="listbox" style="display:none;">
+                                <div class="zone-dropdown-search-wrapper" id="zoneSearchWrapper" style="display:none;">
+                                    <i data-lucide="search" class="zone-search-icon"></i>
+                                    <input type="text" id="zoneSearchInput" class="zone-search-input" placeholder="Buscar zona..." autocomplete="off">
+                                </div>
+                                <div class="zone-dropdown-list" id="zoneDropdownList">
+                                    <!-- Se puebla dinámicamente -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="meta-item" title="URL bajo monitoreo continuo">

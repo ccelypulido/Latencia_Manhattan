@@ -29,6 +29,7 @@ function initLucideIcons() {
 // Event Listeners setup
 function setupEventListeners() {
     initHelpSystem();
+    initZoneCustomDropdown();
     // General Auto-probe Stop / Resume Toggle Button
     const btnToggleAuto = document.getElementById('btnToggleAuto');
     if (btnToggleAuto) {
@@ -547,6 +548,9 @@ async function fetchZones() {
             });
             activeSel.innerHTML = activeHtml;
             activeSel.value = currentZone;
+
+            // Render custom dropdown with adaptive height
+            renderCustomZoneDropdown(uniqueZones, currentZone);
         }
 
         // 2. Populate filterZoneSelect (View filter)
@@ -661,6 +665,257 @@ async function quickAddZone() {
         }
     } catch (err) {
         alert('Error al agregar nueva zona: ' + err.message);
+    }
+}
+
+// ==========================================================================
+// CUSTOM ZONE DROPDOWN COMPONENT (Adaptive Viewport Height)
+// ==========================================================================
+
+function initZoneCustomDropdown() {
+    const trigger = document.getElementById('btnZoneDropdownTrigger');
+    if (trigger) {
+        trigger.addEventListener('click', toggleZoneDropdown);
+    }
+
+    const searchInput = document.getElementById('zoneSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            filterZoneDropdownItems(e.target.value);
+        });
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const list = document.getElementById('zoneDropdownList');
+                if (list) {
+                    const firstVisible = Array.from(list.querySelectorAll('.zone-dropdown-item')).find(el => el.style.display !== 'none');
+                    if (firstVisible) {
+                        selectCustomZone(firstVisible.getAttribute('data-value') || '');
+                    }
+                }
+            } else if (e.key === 'Escape') {
+                closeZoneDropdown();
+            }
+        });
+    }
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+        const container = document.getElementById('zoneDropdownContainer');
+        if (container && !container.contains(e.target)) {
+            closeZoneDropdown();
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeZoneDropdown();
+        }
+    });
+
+    // Recalculate max-height on window resize or scroll
+    window.addEventListener('resize', positionZoneDropdown);
+    window.addEventListener('scroll', positionZoneDropdown, { passive: true });
+}
+
+function renderCustomZoneDropdown(zones, curZone) {
+    const triggerText = document.getElementById('zoneTriggerText');
+    const dropdownList = document.getElementById('zoneDropdownList');
+    const searchWrapper = document.getElementById('zoneSearchWrapper');
+    const searchInput = document.getElementById('zoneSearchInput');
+
+    if (!triggerText || !dropdownList) return;
+
+    // 1. Update trigger label
+    if (curZone) {
+        triggerText.textContent = `📍 ${curZone}`;
+        triggerText.title = `Zona activa: ${curZone}`;
+    } else {
+        triggerText.textContent = '(Sin Zona / General)';
+        triggerText.title = 'Sin Zona seleccionada (Muestras generales)';
+    }
+
+    // 2. Show search input if there are more than 6 zones
+    if (searchWrapper) {
+        searchWrapper.style.display = (zones && zones.length > 6) ? 'flex' : 'none';
+        if (searchInput) searchInput.value = '';
+    }
+
+    // 3. Render items list
+    let html = '';
+    
+    // Default option: "(Sin Zona / General)"
+    const isGeneralSel = !curZone ? 'selected' : '';
+    html += `
+        <div class="zone-dropdown-item ${isGeneralSel}" data-value="" role="option" aria-selected="${!curZone}">
+            <span>(Sin Zona / General)</span>
+            <i data-lucide="check" class="zone-dropdown-item-check"></i>
+        </div>
+    `;
+
+    // Each custom zone
+    if (zones && zones.length > 0) {
+        zones.forEach(z => {
+            if (!z) return;
+            const isSel = (z === curZone) ? 'selected' : '';
+            html += `
+                <div class="zone-dropdown-item ${isSel}" data-value="${z}" role="option" aria-selected="${z === curZone}">
+                    <span>📍 ${z}</span>
+                    <i data-lucide="check" class="zone-dropdown-item-check"></i>
+                </div>
+            `;
+        });
+    }
+
+    dropdownList.innerHTML = html;
+    initLucideIcons();
+
+    // 4. Attach click handlers to items
+    dropdownList.querySelectorAll('.zone-dropdown-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const val = item.getAttribute('data-value') || '';
+            selectCustomZone(val);
+        });
+    });
+}
+
+function selectCustomZone(val) {
+    const activeSel = document.getElementById('activeZoneSelect');
+    if (activeSel) {
+        activeSel.value = val;
+        // Dispatch change event so existing listener calls changeActiveZone(val)
+        activeSel.dispatchEvent(new Event('change'));
+    }
+    closeZoneDropdown();
+}
+
+function toggleZoneDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('zoneDropdownMenu');
+    if (!menu) return;
+    if (menu.style.display === 'none' || !menu.style.display) {
+        openZoneDropdown();
+    } else {
+        closeZoneDropdown();
+    }
+}
+
+function openZoneDropdown() {
+    const menu = document.getElementById('zoneDropdownMenu');
+    const container = document.getElementById('zoneDropdownContainer');
+    const trigger = document.getElementById('btnZoneDropdownTrigger');
+    const list = document.getElementById('zoneDropdownList');
+    const searchInput = document.getElementById('zoneSearchInput');
+    if (!menu || !container || !trigger) return;
+
+    menu.style.display = 'flex';
+    container.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+
+    positionZoneDropdown();
+
+    // Scroll selected item into view
+    if (list) {
+        const selected = list.querySelector('.zone-dropdown-item.selected');
+        if (selected) {
+            selected.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    // Focus search input if visible
+    const searchWrapper = document.getElementById('zoneSearchWrapper');
+    if (searchWrapper && searchWrapper.style.display !== 'none' && searchInput) {
+        setTimeout(() => searchInput.focus(), 50);
+    }
+}
+
+function closeZoneDropdown() {
+    const menu = document.getElementById('zoneDropdownMenu');
+    const container = document.getElementById('zoneDropdownContainer');
+    const trigger = document.getElementById('btnZoneDropdownTrigger');
+    if (!menu) return;
+
+    menu.style.display = 'none';
+    if (container) container.classList.remove('open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+
+    // Reset filter search
+    const searchInput = document.getElementById('zoneSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+        filterZoneDropdownItems('');
+    }
+}
+
+function positionZoneDropdown() {
+    const trigger = document.getElementById('btnZoneDropdownTrigger');
+    const menu = document.getElementById('zoneDropdownMenu');
+    const list = document.getElementById('zoneDropdownList');
+    if (!trigger || !menu || !list || menu.style.display === 'none') return;
+
+    const rect = trigger.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const windowWidth = window.innerWidth;
+    
+    // Space below trigger leaving a 16px safety margin from the window edge
+    const spaceBelow = windowHeight - rect.bottom - 16;
+    // Space above trigger leaving a 16px safety margin from window top
+    const spaceAbove = rect.top - 16;
+
+    const searchWrapper = document.getElementById('zoneSearchWrapper');
+    const searchHeight = (searchWrapper && searchWrapper.style.display !== 'none') ? searchWrapper.offsetHeight : 0;
+
+    // Vertical positioning & adaptive max-height
+    if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+        // Open upwards
+        menu.style.top = 'auto';
+        menu.style.bottom = 'calc(100% + 6px)';
+        const maxListHeight = Math.max(120, spaceAbove - searchHeight - 24);
+        list.style.maxHeight = `${maxListHeight}px`;
+    } else {
+        // Open downwards (default)
+        menu.style.top = 'calc(100% + 6px)';
+        menu.style.bottom = 'auto';
+        const maxListHeight = Math.max(120, spaceBelow - searchHeight - 24);
+        list.style.maxHeight = `${maxListHeight}px`;
+    }
+
+    // Horizontal guard: prevent overflowing right edge of viewport
+    if (rect.left + 260 > windowWidth) {
+        menu.style.left = 'auto';
+        menu.style.right = '0';
+    } else {
+        menu.style.left = '0';
+        menu.style.right = 'auto';
+    }
+}
+
+function filterZoneDropdownItems(query) {
+    const list = document.getElementById('zoneDropdownList');
+    if (!list) return;
+    const q = (query || '').toLowerCase().trim();
+    const items = list.querySelectorAll('.zone-dropdown-item');
+    let visibleCount = 0;
+
+    items.forEach(item => {
+        const text = (item.textContent || '').toLowerCase();
+        const matches = !q || text.includes(q);
+        item.style.display = matches ? 'flex' : 'none';
+        if (matches) visibleCount++;
+    });
+
+    let emptyMsg = list.querySelector('.zone-dropdown-empty');
+    if (visibleCount === 0) {
+        if (!emptyMsg) {
+            emptyMsg = document.createElement('div');
+            emptyMsg.className = 'zone-dropdown-empty';
+            emptyMsg.textContent = 'No se encontraron zonas que coincidan';
+            list.appendChild(emptyMsg);
+        }
+        emptyMsg.style.display = 'block';
+    } else if (emptyMsg) {
+        emptyMsg.style.display = 'none';
     }
 }
 
