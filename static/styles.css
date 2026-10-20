@@ -2447,3 +2447,68 @@ button.status-toggle-btn:hover .btn-inline-icon {
     border-color: rgba(239, 68, 68, 0.4);
     color: var(--accent-rose);
 }
+
+/* Toast Notifications & Import Sedes Dropzone */
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast-msg {
+    pointer-events: auto;
+    min-width: 320px;
+    max-width: 480px;
+    background: #0f172a;
+    color: #f1f5f9;
+    padding: 12px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast-msg.success {
+    border-color: #10b981;
+    background: #064e3b;
+    color: #ecfdf5;
+}
+
+.toast-msg.error {
+    border-color: #ef4444;
+    background: #450a0a;
+    color: #fef2f2;
+}
+
+.toast-msg.warning {
+    border-color: #f59e0b;
+    background: #451a03;
+    color: #fffbeb;
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.dropzone-sedes:hover {
+    border-color: #38bdf8 !important;
+    background: rgba(56, 189, 248, 0.12) !important;
+}

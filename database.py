@@ -3,7 +3,10 @@ import datetime
 import math
 import json
 import contextlib
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
+import os
+import csv
+import io
 
 DB_FILE = "latency_history.db"
 
@@ -114,6 +117,7 @@ def init_db():
         for k, v in defaults.items():
             cursor.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
         conn.commit()
+    auto_preload_sedes_zonas()
 
 def save_record(record: Dict[str, Any], location: Optional[str] = None, zone: Optional[str] = None) -> int:
     """Inserts a new latency measurement record with location and zone tagging into SQLite."""
@@ -242,6 +246,205 @@ def add_zone_to_location(location_name: str, zone_name: str) -> List[str]:
     set_config_key("zones_by_location", json.dumps(mapping, ensure_ascii=False))
     set_config_key("current_zone", zone_clean)
     return current
+
+def parse_sedes_zonas_content(content_str: str, file_type: str = "auto") -> Dict[str, List[str]]:
+    """Parses a CSV or JSON string defining Sedes and Zonas and returns a normalized dictionary:
+    { "Sede1": ["Zona A", "Zona B"], "Sede2": ["Zona 1", "Zona 2"] }
+    """
+    content_str = content_str.strip()
+    if not content_str:
+        return {}
+
+    # Auto-detect if JSON
+    is_json = (file_type == "json") or (file_type == "auto" and (content_str.startswith("{") or content_str.startswith("[")))
+    if is_json:
+        try:
+            data = json.loads(content_str)
+            result = {}
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    loc_name = str(k).strip()
+                    if not loc_name:
+                        continue
+                    z_list = []
+                    if isinstance(v, list):
+                        for item in v:
+                            for sub in str(item).split(","):
+                                sub_clean = sub.strip()
+                                if sub_clean and sub_clean not in z_list:
+                                    z_list.append(sub_clean)
+                    elif isinstance(v, str):
+                        for sub in v.split(","):
+                            sub_clean = sub.strip()
+                            if sub_clean and sub_clean not in z_list:
+                                z_list.append(sub_clean)
+                    result[loc_name] = z_list
+                return result
+            elif isinstance(data, list):
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    loc = (item.get("sede") or item.get("location") or item.get("sede_nombre") or "").strip()
+                    if not loc:
+                        continue
+                    if loc not in result:
+                        result[loc] = []
+                    zones_val = item.get("zona") or item.get("zone") or item.get("zonas") or item.get("zones") or []
+                    if isinstance(zones_val, list):
+                        for z in zones_val:
+                            for sub in str(z).split(","):
+                                sub_clean = sub.strip()
+                                if sub_clean and sub_clean not in result[loc]:
+                                    result[loc].append(sub_clean)
+                    elif isinstance(zones_val, str):
+                        for sub in zones_val.split(","):
+                            sub_clean = sub.strip()
+                            if sub_clean and sub_clean not in result[loc]:
+                                result[loc].append(sub_clean)
+                return result
+        except Exception as e:
+            raise ValueError(f"Error al procesar formato JSON de Sedes/Zonas: {str(e)}")
+
+    # Parse as CSV
+    result = {}
+    try:
+        lines = [l for l in content_str.splitlines() if l.strip()]
+        if not lines:
+            return {}
+        first_line = lines[0]
+        delimiter = ";" if ";" in first_line else ","
+        
+        f = io.StringIO(content_str)
+        reader = csv.reader(f, delimiter=delimiter)
+        first_row = next(reader, None)
+        if not first_row:
+            return {}
+
+        loc_idx = 0
+        zone_idx = 1
+        has_header = False
+
+        header_lower = [c.lower().strip() for c in first_row]
+        for idx, col in enumerate(header_lower):
+            if col in ["sede", "location", "sede_nombre", "nombre_sede", "bodega", "almacen"]:
+                loc_idx = idx
+                has_header = True
+            elif col in ["zona", "zone", "zonas", "zones", "area"]:
+                zone_idx = idx
+                has_header = True
+
+        rows_to_process = []
+        if not has_header:
+            rows_to_process.append(first_row)
+        for row in reader:
+            if row:
+                rows_to_process.append(row)
+
+        for row in rows_to_process:
+            if not row or len(row) == 0:
+                continue
+            loc = row[loc_idx].strip() if len(row) > loc_idx else ""
+            if not loc:
+                continue
+            if loc not in result:
+                result[loc] = []
+
+            if len(row) > zone_idx:
+                raw_zone = row[zone_idx]
+                for sub in str(raw_zone).split(","):
+                    sub_clean = sub.strip()
+                    if sub_clean and sub_clean not in result[loc]:
+                        result[loc].append(sub_clean)
+
+        return result
+    except Exception as e:
+        raise ValueError(f"Error al procesar formato CSV de Sedes/Zonas: {str(e)}")
+
+def import_sedes_zonas_map(new_map: Dict[str, List[str]], mode: str = "merge") -> Tuple[int, int, Dict[str, List[str]]]:
+    """Applies a parsed map of sedes and zonas to config.
+    mode=merge: adds new sedes and new zones without removing existing ones.
+    mode=replace: completely overwrites with the provided map.
+    Returns: (total_locations, total_zones, updated_map)
+    """
+    if mode == "replace":
+        mapping = {}
+    else:
+        mapping = get_location_zones_map()
+
+    for loc, zones in new_map.items():
+        loc_clean = str(loc).strip()
+        if not loc_clean:
+            continue
+        if loc_clean not in mapping:
+            mapping[loc_clean] = []
+        for z in zones:
+            for sub in str(z).split(","):
+                sub_clean = sub.strip()
+                if sub_clean and sub_clean not in mapping[loc_clean]:
+                    mapping[loc_clean].append(sub_clean)
+
+    set_config_key("zones_by_location", json.dumps(mapping, ensure_ascii=False))
+    
+    total_locs = len(mapping)
+    total_zones = sum(len(z) for z in mapping.values())
+    return total_locs, total_zones, mapping
+
+def export_sedes_zonas(export_format: str = "json") -> Tuple[str, str, str]:
+    """Exports the current zones_by_location dictionary in JSON or CSV format.
+    Returns: (content_str, content_type, default_filename)
+    """
+    mapping = get_location_zones_map()
+    if export_format.lower() == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["sede", "zona"])
+        for loc in sorted(mapping.keys()):
+            zones = mapping[loc]
+            if not zones:
+                writer.writerow([loc, ""])
+            else:
+                for z in zones:
+                    writer.writerow([loc, z])
+        content = output.getvalue()
+        return content, "text/csv; charset=utf-8", "sedes_zonas.csv"
+    else:
+        content = json.dumps(mapping, indent=2, ensure_ascii=False)
+        return content, "application/json; charset=utf-8", "sedes_zonas.json"
+
+def auto_preload_sedes_zonas() -> bool:
+    """Checks if a sedes_zonas.json or sedes_zonas.csv file exists in the project root.
+    If found and valid, auto-merges it into config on server startup.
+    """
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    json_file = os.path.join(root_dir, "sedes_zonas.json")
+    csv_file = os.path.join(root_dir, "sedes_zonas.csv")
+
+    target_file = None
+    file_type = "json"
+    if os.path.exists(json_file):
+        target_file = json_file
+        file_type = "json"
+    elif os.path.exists(csv_file):
+        target_file = csv_file
+        file_type = "csv"
+
+    if not target_file:
+        return False
+
+    try:
+        with open(target_file, "r", encoding="utf-8-sig") as f:
+            content = f.read()
+        parsed = parse_sedes_zonas_content(content, file_type=file_type)
+        if parsed:
+            # Check if current map is empty or only default 2 locations
+            current_map = get_location_zones_map()
+            is_minimal = (len(current_map) <= 2 and "Bodega_CLEN" in current_map and len(current_map.get("Bodega_CLEN", [])) <= 5)
+            import_sedes_zonas_map(parsed, mode="merge" if not is_minimal else "merge")
+            print(f"[Sedes/Zonas] Precarga automática exitosa desde {os.path.basename(target_file)}: {len(parsed)} sedes integradas.")
+            return True
+    except Exception as e:
+        print(f"[Sedes/Zonas] Advertencia en precarga automática: {e}")
+    return False
 
 def get_zones(location_filter: Optional[str] = None) -> List[str]:
     """Returns distinct zones from database records and predefined zones for the location."""

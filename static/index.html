@@ -8,10 +8,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js (Local first para soporte sin conexión / Incógnito) -->
+    <script src="/chart.umd.min.js"></script>
+    <script>
+        if (typeof Chart === "undefined") {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>');
+        }
+    </script>
+    <!-- Lucide Icons (Local first para soporte sin conexión / Incógnito) -->
+    <script src="/lucide.min.js"></script>
+    <script>
+        if (typeof lucide === "undefined") {
+            document.write('<script src="https://unpkg.com/lucide@latest"><\/script>');
+        }
+    </script>
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -109,6 +119,9 @@
                             </select>
                             <button type="button" id="btnQuickAddZone" class="btn-zone-add" title="Crear nueva zona para esta sede (ej: Rack:5-6, Pasillo 3)">
                                 <i data-lucide="plus"></i>
+                            </button>
+                            <button type="button" id="btnQuickImportZones" class="btn-zone-add" style="margin-left: 3px;" title="Precargar o importar Sedes y Zonas desde archivo (JSON / CSV)">
+                                <i data-lucide="upload-cloud"></i>
                             </button>
 
                             <!-- Menú Desplegable con Alto Adaptable a la Ventana -->
@@ -522,6 +535,67 @@
                         <label for="cfgLocationZones">Zonas Predefinidas (separadas por coma):</label>
                         <input type="text" id="cfgLocationZones" class="form-input" placeholder="Habitación:201, Habitación:202, Rack:1-2, Bunker">
                         <small class="form-help">Catálogo de zonas para alternar con un clic al caminar. Puedes ingresar múltiples zonas separadas por coma.</small>
+                    </div>
+                </div>
+
+                <!-- Panel de Precarga e Importación / Exportación Masiva de Sedes y Zonas -->
+                <div class="import-sedes-zonas-panel" style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 1.1rem; margin-top: 1rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+                        <h3 style="font-size: 0.95rem; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 0.4rem; margin: 0;">
+                            <i data-lucide="upload-cloud" style="width: 18px; height: 18px;"></i> Precarga Masiva de Sedes y Zonas (CSV / JSON)
+                        </h3>
+                        <span style="font-size: 0.72rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 8px; border-radius: 12px; font-weight: 600;">Soporta .json y .csv</span>
+                    </div>
+                    <p style="font-size: 0.8rem; color: #94a3b8; line-height: 1.4; margin-bottom: 0.85rem;">
+                        Define o actualiza todas las sedes y zonas de tu operación cargando un archivo. La aplicación también precarga automáticamente el archivo <code>sedes_zonas.json</code> ubicado en la raíz del proyecto.
+                    </p>
+
+                    <!-- Zona de arrastre / selector de archivo -->
+                    <div id="dropzoneSedesZonas" class="dropzone-sedes" style="border: 2px dashed rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 1.2rem; text-align: center; cursor: pointer; background: rgba(30, 41, 59, 0.3); transition: all 0.2s ease;">
+                        <i data-lucide="file-up" style="width: 28px; height: 28px; color: #38bdf8; margin-bottom: 0.35rem;"></i>
+                        <div style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">Haz clic para seleccionar o arrastra aquí tu archivo</div>
+                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Formatos admitidos: <strong>.json</strong> (mapeo o listado) o <strong>.csv</strong> (columnas: sede, zona)</div>
+                        <input type="file" id="fileSedesZonasInput" accept=".json,.csv" style="display: none;">
+                    </div>
+
+                    <!-- Modo de importación -->
+                    <div style="display: flex; gap: 1.5rem; margin-top: 0.85rem; padding: 0.2rem; font-size: 0.8rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; color: #cbd5e1;">
+                            <input type="radio" name="importMode" value="merge" checked id="importModeMerge">
+                            <span><strong>Fusionar:</strong> Agregar nuevas sedes y zonas sin borrar las existentes</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; color: #cbd5e1;">
+                            <input type="radio" name="importMode" value="replace" id="importModeReplace">
+                            <span><strong>Reemplazar:</strong> Sobrescribir el catálogo completamente</span>
+                        </label>
+                    </div>
+
+                    <!-- Vista previa del archivo cargado (oculta por defecto) -->
+                    <div id="importPreviewBox" style="display: none; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.75rem; margin-top: 0.85rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                            <span id="importPreviewTitle" style="font-size: 0.82rem; font-weight: 700; color: #34d399;"></span>
+                            <button type="button" id="btnCancelImportPreview" class="btn btn-sm btn-outline" style="padding: 2px 8px; font-size: 0.72rem;">Cancelar</button>
+                        </div>
+                        <div id="importPreviewDetails" style="font-size: 0.76rem; color: #cbd5e1; max-height: 120px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; line-height: 1.45; background: rgba(0,0,0,0.25); padding: 6px; border-radius: 4px;"></div>
+                        <button type="button" id="btnExecuteImport" class="btn btn-primary btn-sm" style="margin-top: 0.65rem; width: 100%; justify-content: center;">
+                            <i data-lucide="check-circle-2"></i> Confirmar y Aplicar al Catálogo de Sedes
+                        </button>
+                    </div>
+
+                    <!-- Botones de plantilla y exportación -->
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button type="button" id="btnDownloadCsvTemplate" class="btn btn-outline btn-sm" style="font-size: 0.75rem;" title="Descargar archivo modelo en Excel/CSV">
+                            <i data-lucide="file-spreadsheet"></i> Plantilla CSV
+                        </button>
+                        <button type="button" id="btnDownloadJsonTemplate" class="btn btn-outline btn-sm" style="font-size: 0.75rem;" title="Descargar archivo modelo en JSON">
+                            <i data-lucide="file-code"></i> Plantilla JSON
+                        </button>
+                        <button type="button" id="btnExportCurrentJson" class="btn btn-secondary btn-sm" style="font-size: 0.75rem;" title="Guardar catálogo actual de la app como JSON">
+                            <i data-lucide="download"></i> Exportar JSON
+                        </button>
+                        <button type="button" id="btnExportCurrentCsv" class="btn btn-secondary btn-sm" style="font-size: 0.75rem;" title="Guardar catálogo actual de la app como CSV">
+                            <i data-lucide="download"></i> Exportar CSV
+                        </button>
                     </div>
                 </div>
 

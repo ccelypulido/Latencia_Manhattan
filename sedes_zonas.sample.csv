@@ -1,0 +1,41 @@
+sede,zona
+Bodega_CLEN,Rack:1
+Bodega_CLEN,Rack:2-3
+Bodega_CLEN,Rack:4-5
+Bodega_CLEN,Rack:6-7
+Bodega_CLEN,Rack:8-9
+Bodega_CLEN,Rack:10-11
+Bodega_CLEN,Rack:12-13
+Bodega_CLEN,Rack:14-15
+Bodega_CLEN,Rack:16-17
+Bodega_CLEN,Rack:18-19
+Bodega_CLEN,Rack:20-21
+Bodega_CLEN,Rack:22-23
+Bodega_CLEN,Rack:24-25
+Bodega_CLEN,Rack:26-27
+Bodega_CLEN,Rack:28-29
+Bodega_CLEN,Rack:30-31
+Bodega_CLEN,Rack:32-33
+Bodega_CLEN,Rack:34-35
+Bodega_CLEN,Rack:36-37
+Bodega_CLEN,Muelles:P1-P6
+Bodega_CLEN,Muelles:P7-P14
+Bodega_CLEN,Muelles:P15-P20
+Bodega_CLEN,Muelles:P21-P23
+Bodega_CLEN,Mezanine
+Bodega_CLEN,Bunker
+Bodega_REPME,Muelle:1-2
+Bodega_REPME,Muelle:3-4
+Bodega_REPME,Pasillo A
+Bodega_REPME,Pasillo B
+Bodega_REPME,Mezanine REPME
+Hotel_Porton_MDE,Lobby
+Hotel_Porton_MDE,Piso 1
+Hotel_Porton_MDE,Piso 2
+Hotel_Porton_MDE,Centro de Negocios
+Sede Principal,Rack:1-2
+Sede Principal,Rack:3-4
+Sede Principal,Muelles:1-2
+Sede Principal,Mezanine
+Sede Principal,Bunker
+Sede Principal,Oficinas

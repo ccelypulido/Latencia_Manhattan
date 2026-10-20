@@ -8,21 +8,27 @@ let autoRefreshTimer = null;
 const REFRESH_INTERVAL_MS = 4000;
 
 document.addEventListener('DOMContentLoaded', () => {
-    initLucideIcons();
-    initCharts();
-    setupEventListeners();
-    loadConfig();
-    fetchLocations();
-    fetchZones();
-    refreshAllData();
+    try { initLucideIcons(); } catch (e) { console.warn("Lucide init warning:", e); }
+    try { initCharts(); } catch (e) { console.warn("Charts init warning:", e); }
+    try { setupEventListeners(); } catch (e) { console.error("setupEventListeners error:", e); }
+    try { loadConfig(); } catch (e) { console.error("loadConfig error:", e); }
+    try { fetchLocations(); } catch (e) { console.error("fetchLocations error:", e); }
+    try { fetchZones(); } catch (e) { console.error("fetchZones error:", e); }
+    try { refreshAllData(); } catch (e) { console.error("refreshAllData error:", e); }
 
     // Start auto-refresh polling
-    autoRefreshTimer = setInterval(refreshAllData, REFRESH_INTERVAL_MS);
+    if (!autoRefreshTimer) {
+        autoRefreshTimer = setInterval(refreshAllData, REFRESH_INTERVAL_MS);
+    }
 });
 
 function initLucideIcons() {
-    if (window.lucide) {
-        window.lucide.createIcons();
+    if (typeof lucide !== "undefined" && lucide && typeof lucide.createIcons === "function") {
+        try {
+            lucide.createIcons();
+        } catch (e) {
+            console.warn("Error creando iconos Lucide:", e);
+        }
     }
 }
 
@@ -30,6 +36,7 @@ function initLucideIcons() {
 function setupEventListeners() {
     initHelpSystem();
     initZoneCustomDropdown();
+    initSedesZonasImport();
     // General Auto-probe Stop / Resume Toggle Button
     const btnToggleAuto = document.getElementById('btnToggleAuto');
     if (btnToggleAuto) {
@@ -1562,6 +1569,11 @@ function showDetailModal(r) {
 
 // Chart.js Initialization
 function initCharts() {
+    if (typeof Chart === "undefined") {
+        console.warn("Chart.js no está disponible aún. Las métricas continuarán funcionando normalmente.");
+        return;
+    }
+    try {
     const chartOptionsBase = {
         responsive: true,
         maintainAspectRatio: false,
@@ -1696,6 +1708,9 @@ function initCharts() {
             }
         }
     });
+    } catch (chartErr) {
+        console.error("Error al instanciar gráficas Chart.js:", chartErr);
+    }
 }
 
 function updateBreakdownChart(records) {
@@ -2675,4 +2690,268 @@ async function excludeNetNode(host, name) {
     } catch (err) {
         alert('Error al excluir el nodo: ' + err);
     }
+}
+
+
+// ==========================================
+// TOAST NOTIFICATIONS & SEDES/ZONAS IMPORT
+// ==========================================
+
+function showToast(message, type = "info", duration = 4000) {
+    let container = document.querySelector(".toast-container");
+    if (!container) {
+        container = document.createElement("div");
+        container.className = "toast-container";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast-msg ${type}`;
+    
+    let iconName = "info";
+    if (type === "success") iconName = "check-circle";
+    else if (type === "error") iconName = "alert-octagon";
+    else if (type === "warning") iconName = "alert-triangle";
+
+    toast.innerHTML = `
+        <i data-lucide="${iconName}" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+        <div style="flex: 1;">${escapeHtml(message)}</div>
+    `;
+
+    container.appendChild(toast);
+    initLucideIcons();
+
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(15px) scale(0.95)";
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+let pendingImportData = null;
+
+function initSedesZonasImport() {
+    const btnQuick = document.getElementById("btnQuickImportZones");
+    if (btnQuick) {
+        btnQuick.addEventListener("click", () => {
+            openModal("configModal");
+            setTimeout(() => {
+                const panel = document.querySelector(".import-sedes-zonas-panel");
+                if (panel) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 180);
+        });
+    }
+
+    const dropzone = document.getElementById("dropzoneSedesZonas");
+    const fileInput = document.getElementById("fileSedesZonasInput");
+    const previewBox = document.getElementById("importPreviewBox");
+    const previewTitle = document.getElementById("importPreviewTitle");
+    const previewDetails = document.getElementById("importPreviewDetails");
+    const btnCancel = document.getElementById("btnCancelImportPreview");
+    const btnExecute = document.getElementById("btnExecuteImport");
+
+    if (dropzone && fileInput) {
+        dropzone.addEventListener("click", () => fileInput.click());
+
+        dropzone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            dropzone.style.borderColor = "#38bdf8";
+            dropzone.style.background = "rgba(56, 189, 248, 0.15)";
+        });
+
+        ["dragleave", "dragend"].forEach(evt => {
+            dropzone.addEventListener(evt, () => {
+                dropzone.style.borderColor = "rgba(56, 189, 248, 0.35)";
+                dropzone.style.background = "rgba(30, 41, 59, 0.3)";
+            });
+        });
+
+        dropzone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropzone.style.borderColor = "rgba(56, 189, 248, 0.35)";
+            dropzone.style.background = "rgba(30, 41, 59, 0.3)";
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleSedesZonasFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files && fileInput.files.length > 0) {
+                handleSedesZonasFile(fileInput.files[0]);
+            }
+        });
+    }
+
+    if (btnCancel) {
+        btnCancel.addEventListener("click", () => {
+            pendingImportData = null;
+            if (fileInput) fileInput.value = "";
+            if (previewBox) previewBox.style.display = "none";
+        });
+    }
+
+    if (btnExecute) {
+        btnExecute.addEventListener("click", async () => {
+            if (!pendingImportData) return;
+            const modeInput = document.querySelector('input[name="importMode"]:checked');
+            const mode = modeInput ? modeInput.value : "merge";
+            
+            btnExecute.disabled = true;
+            btnExecute.innerHTML = '<i data-lucide="loader"></i> Procesando e importando...';
+            initLucideIcons();
+
+            try {
+                const res = await fetch("/api/zones/import", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        file_content: pendingImportData.content,
+                        file_type: pendingImportData.fileType,
+                        mode: mode
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || `¡Precarga exitosa! ${data.locations_count} sedes configuradas.`, "success");
+                    if (previewBox) previewBox.style.display = "none";
+                    pendingImportData = null;
+                    if (fileInput) fileInput.value = "";
+                    
+                    // Reload locations, zones and update UI
+                    await fetchLocations();
+                    await fetchZones();
+                    await loadConfig();
+                    await refreshAllData();
+                } else {
+                    showToast(data.error || "Error al importar archivo", "error");
+                }
+            } catch (err) {
+                console.error("Error importing sedes/zonas:", err);
+                showToast("Error de conexión al importar: " + err.message, "error");
+            } finally {
+                btnExecute.disabled = false;
+                btnExecute.innerHTML = '<i data-lucide="check-circle-2"></i> Confirmar y Aplicar al Catálogo de Sedes';
+                initLucideIcons();
+            }
+        });
+    }
+
+    // Template download buttons
+    const btnCsvTmpl = document.getElementById("btnDownloadCsvTemplate");
+    if (btnCsvTmpl) {
+        btnCsvTmpl.addEventListener("click", () => {
+            window.location.href = "/api/zones/template?format=csv";
+        });
+    }
+
+    const btnJsonTmpl = document.getElementById("btnDownloadJsonTemplate");
+    if (btnJsonTmpl) {
+        btnJsonTmpl.addEventListener("click", () => {
+            window.location.href = "/api/zones/template?format=json";
+        });
+    }
+
+    // Export buttons
+    const btnExportJson = document.getElementById("btnExportCurrentJson");
+    if (btnExportJson) {
+        btnExportJson.addEventListener("click", () => {
+            window.location.href = "/api/zones/export?format=json";
+        });
+    }
+
+    const btnExportCsv = document.getElementById("btnExportCurrentCsv");
+    if (btnExportCsv) {
+        btnExportCsv.addEventListener("click", () => {
+            window.location.href = "/api/zones/export?format=csv";
+        });
+    }
+}
+
+function handleSedesZonasFile(file) {
+    if (!file) return;
+    const isJson = file.name.endsWith(".json") || file.type.includes("json");
+    const isCsv = file.name.endsWith(".csv") || file.type.includes("csv") || file.type.includes("text");
+
+    if (!isJson && !isCsv) {
+        showToast("Formato no soportado. Por favor selecciona un archivo .json o .csv", "warning");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const text = e.target.result;
+        try {
+            let detectedLocations = {};
+            if (isJson) {
+                const parsed = JSON.parse(text);
+                if (typeof parsed === "object" && !Array.isArray(parsed)) {
+                    for (const [loc, zones] of Object.entries(parsed)) {
+                        detectedLocations[loc] = Array.isArray(zones) ? zones.length : 1;
+                    }
+                } else if (Array.isArray(parsed)) {
+                    parsed.forEach(item => {
+                        const loc = item.sede || item.location || "Sin Sede";
+                        detectedLocations[loc] = (detectedLocations[loc] || 0) + (Array.isArray(item.zonas) ? item.zonas.length : 1);
+                    });
+                }
+            } else {
+                // CSV preview
+                const lines = text.split("\n").map(l => l.trim()).filter(l => l);
+                const delim = lines[0] && lines[0].includes(";") ? ";" : ",";
+                lines.slice(1).forEach(line => {
+                    const parts = line.split(delim);
+                    if (parts.length > 0 && parts[0].trim()) {
+                        const loc = parts[0].trim().replace(/^[\"\']|[\"\']$/g, "");
+                        if (loc && !["sede", "location"].includes(loc.toLowerCase())) {
+                            detectedLocations[loc] = (detectedLocations[loc] || 0) + 1;
+                        }
+                    }
+                });
+            }
+
+            const locKeys = Object.keys(detectedLocations);
+            if (locKeys.length === 0) {
+                showToast("No se pudieron detectar sedes o zonas en el archivo.", "warning");
+                return;
+            }
+
+            const totalZones = Object.values(detectedLocations).reduce((a, b) => a + b, 0);
+            pendingImportData = {
+                file: file,
+                content: text,
+                fileType: isJson ? "json" : "csv",
+                detectedLocations: detectedLocations
+            };
+
+            const previewBox = document.getElementById("importPreviewBox");
+            const previewTitle = document.getElementById("importPreviewTitle");
+            const previewDetails = document.getElementById("importPreviewDetails");
+
+            if (previewTitle) {
+                previewTitle.innerHTML = `<i data-lucide="check"></i> Archivo listo: <strong>${escapeHtml(file.name)}</strong> (${locKeys.length} sedes, ~${totalZones} zonas)`;
+            }
+            if (previewDetails) {
+                previewDetails.innerHTML = locKeys.map(loc => `• <strong>${escapeHtml(loc)}</strong>: ${detectedLocations[loc]} zona(s)`).join("<br>");
+            }
+            if (previewBox) {
+                previewBox.style.display = "block";
+            }
+            initLucideIcons();
+        } catch (err) {
+            console.error("Error parsing file preview:", err);
+            showToast("Error al leer el archivo: " + err.message, "error");
+        }
+    };
+    reader.readAsText(file);
 }

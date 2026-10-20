@@ -194,6 +194,19 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
             pass
 
+    def send_download(self, content_data: str, content_type: str, filename: str, status: int = 200):
+        try:
+            body = content_data.encode("utf-8") if isinstance(content_data, str) else content_data
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Disposition", f"attachment; filename=\"{filename}\"")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            pass
+
     def send_error(self, code: int, message: str = None, explain: str = None):
         try:
             if hasattr(self, 'path') and self.path.startswith('/api/'):
@@ -222,10 +235,26 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
         static_dir = os.path.join(os.path.dirname(__file__), "static")
         if path == "/" or path == "/index.html":
             return self.send_file(os.path.join(static_dir, "index.html"), "text/html; charset=utf-8")
-        elif path == "/styles.css":
-            return self.send_file(os.path.join(static_dir, "styles.css"), "text/css; charset=utf-8")
-        elif path == "/app.js":
-            return self.send_file(os.path.join(static_dir, "app.js"), "application/javascript; charset=utf-8")
+        elif path.startswith("/") and not path.startswith("/api/"):
+            clean_name = os.path.basename(path)
+            target_path = os.path.join(static_dir, clean_name)
+            if os.path.exists(target_path) and os.path.isfile(target_path):
+                ctype = "application/octet-stream"
+                if clean_name.endswith(".css"):
+                    ctype = "text/css; charset=utf-8"
+                elif clean_name.endswith(".js"):
+                    ctype = "application/javascript; charset=utf-8"
+                elif clean_name.endswith(".html"):
+                    ctype = "text/html; charset=utf-8"
+                elif clean_name.endswith(".json"):
+                    ctype = "application/json; charset=utf-8"
+                elif clean_name.endswith(".csv"):
+                    ctype = "text/csv; charset=utf-8"
+                elif clean_name.endswith(".png"):
+                    ctype = "image/png"
+                elif clean_name.endswith(".ico"):
+                    ctype = "image/x-icon"
+                return self.send_file(target_path, ctype)
 
         # API Endpoints
         if path == "/api/probe/now":
@@ -271,6 +300,23 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
                 "zones": zones,
                 "zones_by_location": zones_by_loc
             })
+
+        elif path == "/api/zones/export":
+            export_fmt = query.get("format", ["json"])[0]
+            content_str, content_type, filename = database.export_sedes_zonas(export_format=export_fmt)
+            return self.send_download(content_str, content_type, filename)
+
+        elif path == "/api/zones/template":
+            tmpl_fmt = query.get("format", ["csv"])[0]
+            if tmpl_fmt.lower() == "json":
+                sample_json = {
+                    "Bodega_Ejemplo_1": ["Rack:1", "Rack:2", "Muelles", "Mezanine"],
+                    "Bodega_Ejemplo_2": ["Pasillo Central", "Zona de Carga", "Bunker"]
+                }
+                return self.send_download(json.dumps(sample_json, indent=2, ensure_ascii=False), "application/json; charset=utf-8", "plantilla_sedes_zonas.json")
+            else:
+                sample_csv = "sede,zona\nBodega_Ejemplo_1,Rack:1\nBodega_Ejemplo_1,Rack:2\nBodega_Ejemplo_1,Muelles\nBodega_Ejemplo_1,Mezanine\nBodega_Ejemplo_2,Pasillo Central\nBodega_Ejemplo_2,Zona de Carga\nBodega_Ejemplo_2,Bunker\n"
+                return self.send_download(sample_csv, "text/csv; charset=utf-8", "plantilla_sedes_zonas.csv")
 
         elif path == "/api/comparison":
             location_filter = query.get("location", [None])[0]
@@ -466,7 +512,67 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
                     "zones_by_location": database.get_location_zones_map()
                 })
 
+            elif action == "import":
+                file_content = payload.get("file_content", "")
+                file_type = payload.get("file_type", "auto")
+                mode = payload.get("mode", "merge")
+                raw_mapping = payload.get("mapping")
+                try:
+                    if raw_mapping and isinstance(raw_mapping, dict):
+                        parsed = database.parse_sedes_zonas_content(json.dumps(raw_mapping), file_type="json")
+                    elif file_content:
+                        parsed = database.parse_sedes_zonas_content(file_content, file_type=file_type)
+                    else:
+                        return self.send_json({"success": False, "error": "No se recibió archivo ni mapeo de datos."}, status=400)
+                    
+                    if not parsed:
+                        return self.send_json({"success": False, "error": "El archivo no contiene sedes o zonas válidas."}, status=400)
+                    
+                    loc_count, z_count, updated_map = database.import_sedes_zonas_map(parsed, mode=mode)
+                    summary = {k: len(v) for k, v in updated_map.items()}
+                    return self.send_json({
+                        "success": True,
+                        "mode": mode,
+                        "locations_count": loc_count,
+                        "zones_count": z_count,
+                        "summary": summary,
+                        "zones_by_location": updated_map,
+                        "message": f"Se precargaron exitosamente {len(parsed)} sedes y {sum(len(v) for v in parsed.values())} zonas ({'fusionadas' if mode == 'merge' else 'reemplazadas'})."
+                    })
+                except Exception as e:
+                    return self.send_json({"success": False, "error": str(e)}, status=400)
+
             return self.send_json({"success": False, "error": "Invalid action"}, status=400)
+
+        elif path == "/api/zones/import":
+            file_content = payload.get("file_content", "")
+            file_type = payload.get("file_type", "auto")
+            mode = payload.get("mode", "merge")
+            raw_mapping = payload.get("mapping")
+            try:
+                if raw_mapping and isinstance(raw_mapping, dict):
+                    parsed = database.parse_sedes_zonas_content(json.dumps(raw_mapping), file_type="json")
+                elif file_content:
+                    parsed = database.parse_sedes_zonas_content(file_content, file_type=file_type)
+                else:
+                    return self.send_json({"success": False, "error": "No se recibió archivo ni mapeo de datos."}, status=400)
+                
+                if not parsed:
+                    return self.send_json({"success": False, "error": "El archivo no contiene sedes o zonas válidas."}, status=400)
+                
+                loc_count, z_count, updated_map = database.import_sedes_zonas_map(parsed, mode=mode)
+                summary = {k: len(v) for k, v in updated_map.items()}
+                return self.send_json({
+                    "success": True,
+                    "mode": mode,
+                    "locations_count": loc_count,
+                    "zones_count": z_count,
+                    "summary": summary,
+                    "zones_by_location": updated_map,
+                    "message": f"Se precargaron exitosamente {len(parsed)} sedes y {sum(len(v) for v in parsed.values())} zonas ({'fusionadas' if mode == 'merge' else 'reemplazadas'})."
+                })
+            except Exception as e:
+                return self.send_json({"success": False, "error": str(e)}, status=400)
 
         elif path == "/api/net-diag/run":
             global last_net_diag_time

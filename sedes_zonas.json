@@ -1,0 +1,50 @@
+{
+  "Bodega_CLEN": [
+    "Rack:1",
+    "Rack:2-3",
+    "Rack:4-5",
+    "Rack:6-7",
+    "Rack:8-9",
+    "Rack:10-11",
+    "Rack:12-13",
+    "Rack:14-15",
+    "Rack:16-17",
+    "Rack:18-19",
+    "Rack:20-21",
+    "Rack:22-23",
+    "Rack:24-25",
+    "Rack:26-27",
+    "Rack:28-29",
+    "Rack:30-31",
+    "Rack:32-33",
+    "Rack:34-35",
+    "Rack:36-37",
+    "Muelles:P1-P6",
+    "Muelles:P7-P14",
+    "Muelles:P15-P20",
+    "Muelles:P21-P23",
+    "Mezanine",
+    "Bunker"
+  ],
+  "Bodega_REPME": [
+    "Muelle:1-2",
+    "Muelle:3-4",
+    "Pasillo A",
+    "Pasillo B",
+    "Mezanine REPME"
+  ],
+  "Hotel_Porton_MDE": [
+    "Lobby",
+    "Piso 1",
+    "Piso 2",
+    "Centro de Negocios"
+  ],
+  "Sede Principal": [
+    "Rack:1-2",
+    "Rack:3-4",
+    "Muelles:1-2",
+    "Mezanine",
+    "Bunker",
+    "Oficinas"
+  ]
+}
