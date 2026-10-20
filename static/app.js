@@ -35,8 +35,10 @@ function initLucideIcons() {
 // Event Listeners setup
 function setupEventListeners() {
     initHelpSystem();
+    initLocationCustomDropdown();
     initZoneCustomDropdown();
     initSedesZonasImport();
+    initSyncSedesButton();
     // General Auto-probe Stop / Resume Toggle Button
     const btnToggleAuto = document.getElementById('btnToggleAuto');
     if (btnToggleAuto) {
@@ -149,7 +151,10 @@ function setupEventListeners() {
     }
 
     // Modal controls
-    document.getElementById('btnOpenConfig').addEventListener('click', () => openModal('configModal'));
+    document.getElementById('btnOpenConfig').addEventListener('click', () => {
+        openModal('configModal');
+        renderConfiguredSedesList();
+    });
     document.getElementById('btnCloseConfig').addEventListener('click', () => closeModal('configModal'));
     document.getElementById('btnCloseDetail').addEventListener('click', () => closeModal('detailModal'));
 
@@ -251,10 +256,15 @@ function setupEventListeners() {
 
     // Filters Change
     document.getElementById('filterStatus').addEventListener('change', fetchHistory);
-    document.getElementById('filterLocationSelect').addEventListener('change', async () => {
+    document.getElementById('filterLocationSelect').addEventListener('change', async (e) => {
+        const val = e.target.value;
         currentNetDiagRunId = 'latest';
-        await fetchZones();
-        refreshAllData();
+        if (val && val !== 'all' && val !== currentActiveLocation) {
+            await changeActiveLocation(val);
+        } else {
+            await fetchZones();
+            refreshAllData();
+        }
     });
 
     // Auth Toggle Event Listeners
@@ -372,9 +382,11 @@ async function loadConfig() {
         const cfg = await res.json();
         
         document.getElementById('targetUrlBadge').textContent = cfg.target_url || 'https://alkop.sce.manh.com/ping';
-        document.getElementById('currentLocationBadge').textContent = cfg.location_name || 'Sede Principal';
+        currentActiveLocation = cfg.location_name || 'Bodega_CLEN';
+        const badge = document.getElementById('currentLocationBadge');
+        if (badge) badge.textContent = currentActiveLocation;
         
-        document.getElementById('cfgLocationName').value = cfg.location_name || 'Sede Principal';
+        document.getElementById('cfgLocationName').value = currentActiveLocation;
         document.getElementById('cfgTargetUrl').value = cfg.target_url || 'https://alkop.sce.manh.com/ping';
         document.getElementById('cfgInterval').value = cfg.interval_seconds || '10';
         document.getElementById('cfgTimeout').value = cfg.timeout_seconds || '5';
@@ -518,6 +530,7 @@ async function saveConfig() {
     }
 }
 
+let currentActiveLocation = 'Bodega_CLEN';
 let currentZone = '';
 let zonesByLocation = {};
 
@@ -528,6 +541,8 @@ async function fetchZones() {
         let url = '/api/zones';
         if (filterLoc && filterLoc !== 'all') {
             url += `?location=${encodeURIComponent(filterLoc)}`;
+        } else if (currentActiveLocation) {
+            url += `?location=${encodeURIComponent(currentActiveLocation)}`;
         }
         const res = await fetch(url);
         if (!res.ok) {
@@ -543,7 +558,7 @@ async function fetchZones() {
         // 1. Populate activeZoneSelect (Walkthrough switcher)
         const activeSel = document.getElementById('activeZoneSelect');
         if (activeSel) {
-            const currentLoc = document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Sede Principal';
+            const currentLoc = currentActiveLocation || (document.getElementById('currentLocationBadge') ? document.getElementById('currentLocationBadge').textContent.trim() : (document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Bodega_CLEN'));
             const locZones = zonesByLocation[currentLoc] || zones;
             
             const uniqueZones = Array.from(new Set([...(locZones || []), ...(currentZone ? [currentZone] : [])]));
@@ -601,13 +616,22 @@ async function fetchZones() {
 // Change active zone on the fly during warehouse walkthrough
 async function changeActiveZone(newZone) {
     try {
-        const curLoc = document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Sede Principal';
+        const curLoc = currentActiveLocation || (document.getElementById('currentLocationBadge') ? document.getElementById('currentLocationBadge').textContent.trim() : (document.getElementById('cfgLocationName') ? document.getElementById('cfgLocationName').value : 'Bodega_CLEN'));
+        
+        // Optimistic UI update
+        currentZone = newZone || '';
+        const triggerText = document.getElementById('zoneTriggerText');
+        if (triggerText) {
+            triggerText.textContent = currentZone ? `📍 ${currentZone}` : '(Sin Zona / General)';
+            triggerText.title = currentZone ? `Zona activa: ${currentZone}` : 'Sin Zona seleccionada (Muestras generales)';
+        }
+
         const res = await fetch('/api/zones', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 action: 'set_current',
-                zone: newZone,
+                zone: currentZone,
                 location: curLoc
             })
         });
@@ -620,13 +644,13 @@ async function changeActiveZone(newZone) {
         }
         const data = await res.json();
         if (data.success) {
-            currentZone = data.current_zone;
+            currentZone = data.current_zone || '';
             await fetchZones();
             refreshAllData();
         }
     } catch (err) {
         console.error('Error changing active zone:', err);
-        alert('Error al cambiar zona: ' + err.message);
+        showToast('Error al cambiar zona: ' + err.message, 'error');
     }
 }
 
@@ -932,18 +956,284 @@ async function fetchLocations() {
         const res = await fetch('/api/locations');
         const locations = await res.json();
         const select = document.getElementById('filterLocationSelect');
-        const currentVal = select.value;
+        const currentVal = select ? select.value : 'all';
 
-        let html = `<option value="all">Todas las Sedes</option>`;
-        locations.forEach(loc => {
-            html += `<option value="${loc}">${loc}</option>`;
-        });
-        select.innerHTML = html;
-        if (locations.includes(currentVal)) {
-            select.value = currentVal;
+        if (select) {
+            let html = `<option value="all">Todas las Sedes</option>`;
+            locations.forEach(loc => {
+                html += `<option value="${escapeHtml(loc)}">${escapeHtml(loc)}</option>`;
+            });
+            select.innerHTML = html;
+            if (locations.includes(currentVal) || currentVal === 'all') {
+                select.value = currentVal;
+            } else if (locations.includes(currentActiveLocation)) {
+                select.value = currentActiveLocation;
+            } else {
+                select.value = 'all';
+            }
         }
+
+        renderCustomLocationDropdown(locations, currentActiveLocation);
+        renderConfiguredSedesList(locations);
     } catch (err) {
         console.error('Error fetching locations:', err);
+    }
+}
+
+// ==========================================================================
+// CUSTOM SEDE DROPDOWN COMPONENT & SWITCHER
+// ==========================================================================
+
+function initLocationCustomDropdown() {
+    const trigger = document.getElementById('btnLocationDropdownTrigger');
+    if (trigger) {
+        trigger.addEventListener('click', toggleLocationDropdown);
+    }
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+        const container = document.getElementById('locationDropdownContainer');
+        if (container && !container.contains(e.target)) {
+            closeLocationDropdown();
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeLocationDropdown();
+        }
+    });
+}
+
+function toggleLocationDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('locationDropdownMenu');
+    if (!menu) return;
+    if (menu.style.display === 'none' || !menu.style.display) {
+        openLocationDropdown();
+    } else {
+        closeLocationDropdown();
+    }
+}
+
+function openLocationDropdown() {
+    const menu = document.getElementById('locationDropdownMenu');
+    const container = document.getElementById('locationDropdownContainer');
+    const trigger = document.getElementById('btnLocationDropdownTrigger');
+    if (!menu || !container || !trigger) return;
+    menu.style.display = 'flex';
+    container.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+}
+
+function closeLocationDropdown() {
+    const menu = document.getElementById('locationDropdownMenu');
+    const container = document.getElementById('locationDropdownContainer');
+    const trigger = document.getElementById('btnLocationDropdownTrigger');
+    if (!menu || !container) return;
+    menu.style.display = 'none';
+    container.classList.remove('open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function renderCustomLocationDropdown(locations, activeLoc) {
+    const list = document.getElementById('locationDropdownList');
+    if (!list) return;
+
+    const locs = (locations && locations.length > 0) ? locations : [activeLoc || 'Bodega_CLEN'];
+
+    let html = '';
+    locs.forEach(loc => {
+        const isSel = (loc === activeLoc) ? 'selected' : '';
+        html += `
+            <div class="location-dropdown-item ${isSel}" data-value="${escapeHtml(loc)}" role="option" aria-selected="${loc === activeLoc}">
+                <span><i data-lucide="map-pin" style="width: 13px; height: 13px; margin-right: 6px; color: #a855f7;"></i>${escapeHtml(loc)}</span>
+                ${isSel ? '<i data-lucide="check" style="width: 14px; height: 14px; color: #a855f7;"></i>' : ''}
+            </div>
+        `;
+    });
+
+    list.innerHTML = html;
+    initLucideIcons();
+
+    list.querySelectorAll('.location-dropdown-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const val = item.getAttribute('data-value');
+            if (val) {
+                changeActiveLocation(val);
+            }
+            closeLocationDropdown();
+        });
+    });
+}
+
+async function changeActiveLocation(newLoc) {
+    if (!newLoc) return;
+    try {
+        currentActiveLocation = newLoc;
+        const badge = document.getElementById('currentLocationBadge');
+        if (badge) badge.textContent = newLoc;
+
+        const cfgLoc = document.getElementById('cfgLocationName');
+        if (cfgLoc) cfgLoc.value = newLoc;
+
+        // Reset active zone in memory and UI
+        currentZone = '';
+        const zoneTriggerText = document.getElementById('zoneTriggerText');
+        if (zoneTriggerText) {
+            zoneTriggerText.textContent = '(Sin Zona / General)';
+            zoneTriggerText.title = 'Sin Zona seleccionada (Muestras generales)';
+        }
+
+        // Persist active location to server config
+        await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                location_name: newLoc,
+                current_zone: ''
+            })
+        });
+
+        // Sync filterLocationSelect if exists
+        const filterLoc = document.getElementById('filterLocationSelect');
+        if (filterLoc) {
+            let optExists = Array.from(filterLoc.options).some(o => o.value === newLoc);
+            if (!optExists) {
+                const opt = document.createElement('option');
+                opt.value = newLoc;
+                opt.textContent = newLoc;
+                filterLoc.appendChild(opt);
+            }
+            filterLoc.value = newLoc;
+        }
+
+        // Reload zones for the new location and re-render dropdowns
+        await fetchZones();
+        await fetchLocations();
+        refreshAllData();
+        renderConfiguredSedesList();
+    } catch (err) {
+        console.error('Error al cambiar sede activa:', err);
+    }
+}
+
+// Configured Sedes Management in Config Modal
+async function renderConfiguredSedesList(knownLocations) {
+    const container = document.getElementById('configuredSedesList');
+    if (!container) return;
+
+    try {
+        let locs = knownLocations;
+        if (!locs) {
+            const res = await fetch('/api/locations');
+            locs = await res.json();
+        }
+
+        let map = zonesByLocation;
+        if (!map || Object.keys(map).length === 0) {
+            const resCfg = await fetch('/api/config');
+            const cfg = await resCfg.json();
+            try {
+                map = JSON.parse(cfg.zones_by_location || '{}');
+            } catch (e) {
+                map = {};
+            }
+        }
+
+        if (!locs || locs.length === 0) {
+            container.innerHTML = '<span style="font-size: 0.78rem; color: #94a3b8; font-style: italic;">No hay sedes configuradas.</span>';
+            return;
+        }
+
+        let html = '';
+        locs.forEach(loc => {
+            const isActive = (loc === currentActiveLocation);
+            const zCount = (map[loc] && Array.isArray(map[loc])) ? map[loc].length : 0;
+            html += `
+                <div class="sede-chip ${isActive ? 'active-sede' : ''}">
+                    <span style="font-weight: 600;">${escapeHtml(loc)}</span>
+                    <span style="font-size: 0.7rem; opacity: 0.8; background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 4px;">${zCount} zonas</span>
+                    ${isActive ? '<span style="font-size: 0.68rem; color: #a855f7; font-weight: 700; margin-left: 2px;">(Activa)</span>' : ''}
+                    <button type="button" class="sede-chip-delete" data-sede="${escapeHtml(loc)}" title="Eliminar ${escapeHtml(loc)} del catálogo">
+                        <i data-lucide="x" style="width: 12px; height: 12px;"></i>
+                    </button>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+        initLucideIcons();
+
+        container.querySelectorAll('.sede-chip-delete').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const sedeToDelete = btn.getAttribute('data-sede');
+                if (!sedeToDelete) return;
+                if (!confirm(`¿Eliminar la sede "${sedeToDelete}" y sus zonas del catálogo configurado?`)) {
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/locations/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ location: sedeToDelete })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(`Sede "${sedeToDelete}" eliminada del catálogo.`, 'info');
+                        await loadConfig();
+                        await fetchLocations();
+                        await fetchZones();
+                        refreshAllData();
+                    } else {
+                        showToast(data.error || 'Error al eliminar sede.', 'error');
+                    }
+                } catch (err) {
+                    showToast('Error de conexión al eliminar: ' + err.message, 'error');
+                }
+            });
+        });
+    } catch (err) {
+        console.error('Error rendering configured sedes:', err);
+    }
+}
+
+function initSyncSedesButton() {
+    const btnSync = document.getElementById('btnSyncSedesFile');
+    if (btnSync) {
+        btnSync.addEventListener('click', async () => {
+            if (!confirm('¿Deseas reemplazar el catálogo actual con la definición exacta contenida en sedes_zonas.json?')) {
+                return;
+            }
+            btnSync.disabled = true;
+            btnSync.innerHTML = '<i data-lucide="loader" class="spin"></i> Sincronizando...';
+            initLucideIcons();
+
+            try {
+                const res = await fetch('/api/locations/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'replace' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || 'Catálogo sincronizado exitosamente.', 'success');
+                    await loadConfig();
+                    await fetchLocations();
+                    await fetchZones();
+                    refreshAllData();
+                } else {
+                    showToast(data.error || 'Error al sincronizar catálogo.', 'error');
+                }
+            } catch (err) {
+                showToast('Error al sincronizar: ' + err.message, 'error');
+            } finally {
+                btnSync.disabled = false;
+                btnSync.innerHTML = '<i data-lucide="refresh-cw"></i> Sincronizar desde sedes_zonas.json';
+                initLucideIcons();
+            }
+        });
     }
 }
 

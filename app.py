@@ -286,7 +286,8 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             return self.send_json(stats)
 
         elif path == "/api/locations":
-            locations = database.get_locations()
+            only_data = query.get("only_data", ["0"])[0] == "1"
+            locations = database.get_locations(only_with_data=only_data)
             return self.send_json(locations)
 
         elif path == "/api/zones":
@@ -458,7 +459,35 @@ class LatencyHandler(http.server.BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 pass
 
-        if path == "/api/config":
+        if path == "/api/locations/delete":
+            loc = payload.get("location", "").strip()
+            if not loc:
+                return self.send_json({"success": False, "error": "Nombre de sede no especificado."}, status=400)
+            updated = database.delete_location(loc)
+            return self.send_json({
+                "success": True,
+                "deleted": loc,
+                "locations": database.get_locations(),
+                "zones_by_location": updated,
+                "message": f"Sede '{loc}' eliminada del catálogo."
+            })
+
+        elif path == "/api/locations/sync":
+            mode = payload.get("mode", "replace")
+            try:
+                loc_count, z_count, updated = database.sync_sedes_zonas_file(mode=mode)
+                return self.send_json({
+                    "success": True,
+                    "locations_count": loc_count,
+                    "zones_count": z_count,
+                    "locations": database.get_locations(),
+                    "zones_by_location": updated,
+                    "message": f"Catálogo sincronizado exitosamente con sedes_zonas.json ({loc_count} sedes y {z_count} zonas)."
+                })
+            except Exception as e:
+                return self.send_json({"success": False, "error": str(e)}, status=400)
+
+        elif path == "/api/config":
             for k, v in payload.items():
                 if k == "current_zone" and isinstance(v, str) and "," in v:
                     v = v.split(",")[0].strip()

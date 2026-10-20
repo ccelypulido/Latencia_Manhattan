@@ -184,13 +184,19 @@ def get_history(limit: int = 100, offset: int = 0, status_filter: Optional[str] 
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
-def get_locations() -> List[str]:
-    """Returns list of distinct location tags recorded in the database, merged with predefined sedes."""
+def get_locations(only_with_data: bool = False) -> List[str]:
+    """Returns list of distinct location tags.
+    If only_with_data=True, returns only locations that have records in the database.
+    If only_with_data=False, returns configured sedes from zones_by_location merged with active location and any recorded in DB.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT location FROM records WHERE location IS NOT NULL AND location != '' ORDER BY location ASC")
         rows = cursor.fetchall()
         db_locs = [r[0] for r in rows]
+
+    if only_with_data:
+        return db_locs
 
     cfg = get_config()
     raw = cfg.get("zones_by_location", "")
@@ -200,8 +206,9 @@ def get_locations() -> List[str]:
         mapping = {}
 
     predefined_locs = list(mapping.keys())
-    curr_loc = cfg.get("location_name", "Sede Principal")
+    curr_loc = cfg.get("location_name", "")
     all_locs = []
+    # Current active Sede first, then configured sedes, then existing db locs
     for l in ([curr_loc] + predefined_locs + db_locs):
         l_str = str(l).strip()
         if l_str and l_str not in all_locs:
@@ -411,10 +418,22 @@ def export_sedes_zonas(export_format: str = "json") -> Tuple[str, str, str]:
         content = json.dumps(mapping, indent=2, ensure_ascii=False)
         return content, "application/json; charset=utf-8", "sedes_zonas.json"
 
-def auto_preload_sedes_zonas() -> bool:
-    """Checks if a sedes_zonas.json or sedes_zonas.csv file exists in the project root.
-    If found and valid, auto-merges it into config on server startup.
-    """
+def delete_location(location_name: str) -> Dict[str, List[str]]:
+    """Removes a location from the configured zones_by_location dictionary in config."""
+    mapping = get_location_zones_map()
+    if location_name in mapping:
+        del mapping[location_name]
+        set_config_key("zones_by_location", json.dumps(mapping, ensure_ascii=False))
+
+    cfg = get_config()
+    if cfg.get("location_name") == location_name:
+        new_loc = list(mapping.keys())[0] if mapping else "Bodega_CLEN"
+        set_config_key("location_name", new_loc)
+        set_config_key("current_zone", "")
+    return mapping
+
+def sync_sedes_zonas_file(mode: str = "replace") -> Tuple[int, int, Dict[str, List[str]]]:
+    """Reads sedes_zonas.json or sedes_zonas.csv from root and syncs it into DB config."""
     root_dir = os.path.dirname(os.path.abspath(__file__))
     json_file = os.path.join(root_dir, "sedes_zonas.json")
     csv_file = os.path.join(root_dir, "sedes_zonas.csv")
@@ -429,18 +448,53 @@ def auto_preload_sedes_zonas() -> bool:
         file_type = "csv"
 
     if not target_file:
+        raise FileNotFoundError("No se encontró sedes_zonas.json ni sedes_zonas.csv en el directorio raíz.")
+
+    with open(target_file, "r", encoding="utf-8-sig") as f:
+        content = f.read()
+
+    parsed = parse_sedes_zonas_content(content, file_type=file_type)
+    if not parsed:
+        raise ValueError(f"El archivo {os.path.basename(target_file)} no contiene sedes o zonas válidas.")
+
+    loc_count, z_count, updated_map = import_sedes_zonas_map(parsed, mode=mode)
+
+    cfg = get_config()
+    curr_loc = cfg.get("location_name", "")
+    if curr_loc not in updated_map:
+        new_loc = list(updated_map.keys())[0] if updated_map else "Bodega_CLEN"
+        set_config_key("location_name", new_loc)
+        set_config_key("current_zone", "")
+
+    import hashlib
+    content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    set_config_key("sedes_zonas_file_hash", content_hash)
+
+    return loc_count, z_count, updated_map
+
+def auto_preload_sedes_zonas() -> bool:
+    """Checks if a sedes_zonas.json or sedes_zonas.csv file exists in the project root.
+    If found and its hash changed or DB has extra outdated sedes, syncs automatically.
+    """
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    json_file = os.path.join(root_dir, "sedes_zonas.json")
+    csv_file = os.path.join(root_dir, "sedes_zonas.csv")
+
+    target_file = json_file if os.path.exists(json_file) else (csv_file if os.path.exists(csv_file) else None)
+    if not target_file or not os.path.exists(target_file):
         return False
 
     try:
         with open(target_file, "r", encoding="utf-8-sig") as f:
             content = f.read()
-        parsed = parse_sedes_zonas_content(content, file_type=file_type)
-        if parsed:
-            # Check if current map is empty or only default 2 locations
-            current_map = get_location_zones_map()
-            is_minimal = (len(current_map) <= 2 and "Bodega_CLEN" in current_map and len(current_map.get("Bodega_CLEN", [])) <= 5)
-            import_sedes_zonas_map(parsed, mode="merge" if not is_minimal else "merge")
-            print(f"[Sedes/Zonas] Precarga automática exitosa desde {os.path.basename(target_file)}: {len(parsed)} sedes integradas.")
+        import hashlib
+        curr_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        cfg = get_config()
+        saved_hash = cfg.get("sedes_zonas_file_hash", "")
+
+        if curr_hash != saved_hash:
+            sync_sedes_zonas_file(mode="replace")
+            print(f"[Sedes/Zonas] Sincronización automática con {os.path.basename(target_file)} completada.")
             return True
     except Exception as e:
         print(f"[Sedes/Zonas] Advertencia en precarga automática: {e}")

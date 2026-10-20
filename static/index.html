@@ -101,10 +101,17 @@
             <!-- Row 2: Context Metadata Strip & Location View Filter -->
             <div class="navbar-sub">
                 <div class="navbar-context-tags">
-                    <div class="meta-item" title="Sede / Ubicación configurada en este equipo">
+                    <div class="meta-item location-context-item" title="Sede / Ubicación activa de monitoreo (Clic para alternar sede)">
                         <span class="meta-label"><i data-lucide="map-pin"></i> Sede Actual:</span>
-                        <div class="location-badge">
-                            <span id="currentLocationBadge">Sede Principal</span>
+                        <div class="location-selector-wrapper" id="locationDropdownContainer">
+                            <button type="button" class="location-select-trigger" id="btnLocationDropdownTrigger" title="Cambiar rápidamente la Sede actual" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="location-trigger-text" id="currentLocationBadge">Bodega_CLEN</span>
+                                <i data-lucide="chevron-down" class="location-trigger-chevron"></i>
+                            </button>
+                            <div class="location-dropdown-menu" id="locationDropdownMenu" style="display: none;">
+                                <div class="location-dropdown-list" id="locationDropdownList">
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="meta-item zone-context-item" title="Zona física actual donde se toman las pruebas en el recorrido (ej. Rack:1-2, Bunker, Muelles)">
@@ -596,6 +603,21 @@
                         <button type="button" id="btnExportCurrentCsv" class="btn btn-secondary btn-sm" style="font-size: 0.75rem;" title="Guardar catálogo actual de la app como CSV">
                             <i data-lucide="download"></i> Exportar CSV
                         </button>
+                    </div>
+
+                    <!-- Sedes actualmente en el catálogo -->
+                    <div class="configured-sedes-section" style="margin-top: 0.95rem; padding-top: 0.85rem; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 6px;">
+                            <span style="font-size: 0.82rem; font-weight: 700; color: #cbd5e1; display: flex; align-items: center; gap: 0.35rem;">
+                                <i data-lucide="map-pin" style="width: 14px; height: 14px; color: #c084fc;"></i> Sedes en el Catálogo Activo:
+                            </span>
+                            <button type="button" id="btnSyncSedesFile" class="btn btn-outline btn-sm" style="font-size: 0.72rem; padding: 2px 8px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.35);" title="Reemplazar catálogo con la definición exacta de sedes_zonas.json">
+                                <i data-lucide="refresh-cw"></i> Sincronizar desde sedes_zonas.json
+                            </button>
+                        </div>
+                        <div id="configuredSedesList" style="display: flex; flex-wrap: wrap; gap: 0.5rem; max-height: 140px; overflow-y: auto;">
+                            <!-- Rendered dynamically -->
+                        </div>
                     </div>
                 </div>
 

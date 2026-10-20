@@ -25,26 +25,5 @@
     "Muelles:P21-P23",
     "Mezanine",
     "Bunker"
-  ],
-  "Bodega_REPME": [
-    "Muelle:1-2",
-    "Muelle:3-4",
-    "Pasillo A",
-    "Pasillo B",
-    "Mezanine REPME"
-  ],
-  "Hotel_Porton_MDE": [
-    "Lobby",
-    "Piso 1",
-    "Piso 2",
-    "Centro de Negocios"
-  ],
-  "Sede Principal": [
-    "Rack:1-2",
-    "Rack:3-4",
-    "Muelles:1-2",
-    "Mezanine",
-    "Bunker",
-    "Oficinas"
   ]
 }
